@@ -1,0 +1,500 @@
+import React, { useState } from 'react';
+import {
+  Download,
+  Key,
+  Flame,
+  CheckCircle2,
+  Lock,
+  Unlock,
+  HelpCircle,
+  AlertCircle,
+  FileText,
+  BookOpen,
+  ArrowRight,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  Terminal,
+  Copy,
+  Check,
+} from 'lucide-react';
+import confetti from 'canvas-confetti';
+import type { PublicChallengeView } from '../types.ts';
+import { playCyberBlip, playSuccessChime, playErrorBuzz, playHintUnlockSound } from '../utils/audio.ts';
+
+interface ChallengeCardProps {
+  challenge: PublicChallengeView;
+  teamLoggedIn: boolean;
+  onOpenAuthModal: () => void;
+  onViewWriteup: (challenge: PublicChallengeView) => void;
+  onRefreshState: () => void;
+}
+
+export const ChallengeCard: React.FC<ChallengeCardProps> = ({
+  challenge,
+  teamLoggedIn,
+  onOpenAuthModal,
+  onViewWriteup,
+  onRefreshState,
+}) => {
+  const [flagInput, setFlagInput] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<{
+    type: 'success' | 'error' | 'info';
+    text: string;
+  } | null>(null);
+
+  // Accordion drawer for Hint Marketplace
+  const [isHintsExpanded, setIsHintsExpanded] = useState(false);
+
+  // Hint confirmation modal
+  const [hintToUnlock, setHintToUnlock] = useState<{
+    id: string;
+    cost: number;
+    title: string;
+  } | null>(null);
+  const [isUnlockingHint, setIsUnlockingHint] = useState(false);
+  const [copiedHintId, setCopiedHintId] = useState<string | null>(null);
+
+  const handleFlagSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!teamLoggedIn) {
+      onOpenAuthModal();
+      return;
+    }
+
+    if (!flagInput.trim()) return;
+
+    playCyberBlip(900);
+    setIsSubmitting(true);
+    setStatusMessage(null);
+
+    const token = localStorage.getItem('ctf_team_token');
+
+    try {
+      const res = await fetch('/api/submit-flag', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          challengeId: challenge.id,
+          flag: flagInput.trim(),
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        playSuccessChime();
+        confetti({
+          particleCount: 90,
+          spread: 70,
+          origin: { y: 0.65 },
+          colors: ['#00ff66', '#10b981', '#00f0ff', '#ffffff', '#f59e0b'],
+        });
+
+        setStatusMessage({
+          type: 'success',
+          text: data.message || 'FLAG DECRYPTED! Points added to team score.',
+        });
+        setFlagInput('');
+        onRefreshState();
+      } else {
+        playErrorBuzz();
+        setStatusMessage({
+          type: 'error',
+          text: data.error || 'Invalid flag submission.',
+        });
+        onRefreshState();
+      }
+    } catch (err) {
+      playErrorBuzz();
+      setStatusMessage({
+        type: 'error',
+        text: 'Network transmission failure. Check console.',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleConfirmUnlockHint = async () => {
+    if (!hintToUnlock) return;
+    const token = localStorage.getItem('ctf_team_token');
+    if (!token) {
+      onOpenAuthModal();
+      return;
+    }
+
+    setIsUnlockingHint(true);
+    try {
+      const res = await fetch('/api/unlock-hint', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          challengeId: challenge.id,
+          hintId: hintToUnlock.id,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        playHintUnlockSound();
+        setHintToUnlock(null);
+        setStatusMessage({
+          type: 'info',
+          text: `Hint unlocked: -${hintToUnlock.cost} points deducted from final reward!`,
+        });
+        onRefreshState();
+      } else {
+        playErrorBuzz();
+        setStatusMessage({
+          type: 'error',
+          text: data.error || 'Failed to unlock hint.',
+        });
+        setHintToUnlock(null);
+      }
+    } catch (e) {
+      playErrorBuzz();
+      setStatusMessage({
+        type: 'error',
+        text: 'Network error unlocking hint. Please retry.',
+      });
+      setHintToUnlock(null);
+    } finally {
+      setIsUnlockingHint(false);
+    }
+  };
+
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedHintId(id);
+    playCyberBlip(1000);
+    setTimeout(() => setCopiedHintId(null), 2000);
+  };
+
+  const getDifficultyBadge = (diff: string) => {
+    switch (diff) {
+      case 'Easy':
+        return 'text-emerald-400 border-emerald-500/40 bg-emerald-500/10 shadow-[0_0_8px_rgba(0,255,102,0.2)]';
+      case 'Medium':
+        return 'text-amber-400 border-amber-500/40 bg-amber-500/10 shadow-[0_0_8px_rgba(245,158,11,0.2)]';
+      case 'Hard':
+        return 'text-rose-400 border-rose-500/40 bg-rose-500/10 shadow-[0_0_8px_rgba(244,63,94,0.2)]';
+      case 'Insane':
+        return 'text-purple-400 border-purple-500/40 bg-purple-500/10 shadow-[0_0_8px_rgba(168,85,247,0.25)]';
+      default:
+        return 'text-slate-400 border-slate-700 bg-slate-800';
+    }
+  };
+
+  const getCategoryBadge = (cat: string) => {
+    switch (cat.toUpperCase()) {
+      case 'CRYPTO':
+        return 'text-cyan-300 border-cyan-400/50 bg-cyan-500/10 shadow-[0_0_10px_rgba(0,240,255,0.25)]';
+      case 'FORENSICS':
+        return 'text-purple-300 border-purple-400/50 bg-purple-500/10 shadow-[0_0_10px_rgba(168,85,247,0.25)]';
+      case 'WEB':
+        return 'text-sky-300 border-sky-400/50 bg-sky-500/10 shadow-[0_0_10px_rgba(56,189,248,0.25)]';
+      case 'STEGO':
+        return 'text-[#00ff66] border-[#00ff66]/50 bg-[#00ff66]/10 shadow-[0_0_10px_rgba(0,255,102,0.25)]';
+      case 'REV':
+        return 'text-rose-300 border-rose-400/50 bg-rose-500/10 shadow-[0_0_10px_rgba(244,63,94,0.25)]';
+      case 'OSINT':
+        return 'text-teal-300 border-teal-400/50 bg-teal-500/10 shadow-[0_0_10px_rgba(20,184,166,0.25)]';
+      case 'AUDIO':
+        return 'text-orange-300 border-orange-400/50 bg-orange-500/10 shadow-[0_0_10px_rgba(249,115,22,0.25)]';
+      default:
+        return 'text-slate-300 border-slate-600/50 bg-slate-700/20 shadow-[0_0_8px_rgba(148,163,184,0.15)]';
+    }
+  };
+
+  return (
+    <div
+      className={`relative rounded-xl backdrop-blur-md transition-all duration-300 overflow-hidden flex flex-col justify-between group ${
+        challenge.isSolved
+          ? 'bg-gradient-to-b from-[#0d111a]/95 via-[#081812]/95 to-[#042013]/98 border border-emerald-500/70 shadow-[0_0_25px_rgba(0,255,102,0.18),inset_0_0_15px_rgba(0,255,102,0.06)]'
+          : challenge.isLocked
+          ? 'scanlines-overlay bg-gradient-to-b from-[#140808]/95 to-[#0a0303]/98 border border-red-500/60 shadow-[0_0_25px_rgba(239,68,68,0.25)]'
+          : 'bg-[#0d111a]/85 border border-[#00ff66]/20 hover:border-[#00ff66]/60 shadow-[0_0_20px_rgba(0,0,0,0.7)] hover:shadow-[0_0_25px_rgba(0,255,102,0.15)]'
+      }`}
+    >
+      {/* Top Header Card */}
+      <div className="p-5 sm:p-6">
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2 text-xs font-mono">
+            {/* Category Neon Badge Pill */}
+            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-black border tracking-wider uppercase ${getCategoryBadge(challenge.category)}`}>
+              {challenge.category}
+            </span>
+
+            {/* Difficulty Badge */}
+            <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border tracking-wider ${getDifficultyBadge(challenge.difficulty)}`}>
+              {challenge.difficulty}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {challenge.firstBloodTeam && (
+              <div
+                className="flex items-center gap-1.5 text-[10px] font-mono font-black text-amber-300 px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/40 shadow-[0_0_10px_rgba(245,158,11,0.25)]"
+                title={`First Blood claimed by ${challenge.firstBloodTeam}`}
+              >
+                <Flame className="w-3.5 h-3.5 text-red-500 fill-red-500 animate-pulse shrink-0" />
+                <span className="hidden sm:inline">1ST BLOOD:</span>
+                <span className="truncate max-w-[90px]">{challenge.firstBloodTeam}</span>
+              </div>
+            )}
+            <div className="text-right">
+              <span className="font-mono text-lg font-black text-[#00ff66] drop-shadow-[0_0_8px_rgba(0,255,102,0.6)]">
+                {challenge.points}
+              </span>
+              <span className="text-[10px] font-mono text-slate-400 ml-1">PTS</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Challenge Title */}
+        <h3 className="text-base sm:text-lg font-bold text-white tracking-wide flex items-center justify-between gap-2">
+          <span className="group-hover:text-emerald-300 transition-colors">{challenge.title}</span>
+          {challenge.isSolved && (
+            <span className="flex items-center gap-1 text-[11px] font-mono font-bold text-[#00ff66] bg-[#00ff66]/10 px-2 py-0.5 rounded-md border border-[#00ff66]/40 shrink-0 shadow-[0_0_8px_rgba(0,255,102,0.3)]">
+              <CheckCircle2 className="w-3.5 h-3.5 text-[#00ff66]" />
+              <span>SOLVED</span>
+            </span>
+          )}
+        </h3>
+
+        {/* Section Subtitle */}
+        <div className="text-[10px] font-mono text-slate-400 mt-1 uppercase tracking-wider">
+          {challenge.section}
+        </div>
+
+        {/* Description */}
+        <p className="mt-2.5 text-xs sm:text-sm text-slate-300 leading-relaxed font-sans">
+          {challenge.description}
+        </p>
+
+        {/* Secure Attachment Download Bar */}
+        {challenge.hasAttachment && challenge.attachmentInfo && (
+          <div className="mt-3.5 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono">
+            <div className="flex items-center gap-2 text-slate-300 truncate max-w-[220px]">
+              <FileText className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+              <span className="truncate font-medium">{challenge.attachmentInfo.fileName}</span>
+              <span className="text-slate-500 text-[10px]">({challenge.attachmentInfo.size})</span>
+            </div>
+            <a
+              href={`/api/challenges/${challenge.id}/attachment`}
+              download
+              className="flex items-center gap-1.5 text-[#00f0ff] hover:text-white px-2.5 py-1 rounded-md bg-[#00f0ff]/10 hover:bg-[#00f0ff]/20 border border-[#00f0ff]/40 text-[11px] font-mono font-bold transition-all shadow-[0_0_10px_rgba(0,240,255,0.2)] shrink-0"
+            >
+              <Download className="w-3 h-3" />
+              <span>DOWNLOAD ARTIFACT</span>
+            </a>
+          </div>
+        )}
+
+        {/* Hint Marketplace Accordion Drawer */}
+        {challenge.hints.length > 0 && (
+          <div className="mt-4 pt-3 border-t border-slate-800/80">
+            <button
+              type="button"
+              onClick={() => {
+                playCyberBlip(700);
+                setIsHintsExpanded(!isHintsExpanded);
+              }}
+              className="w-full flex items-center justify-between text-xs font-mono text-amber-300 hover:text-amber-200 py-1"
+            >
+              <span className="flex items-center gap-1.5 font-bold">
+                <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
+                <span>HINT MARKETPLACE ({challenge.hints.filter(h => h.isUnlocked).length}/{challenge.hints.length} UNLOCKED)</span>
+              </span>
+              <span className="flex items-center gap-1 text-[11px] text-slate-400">
+                <span>{isHintsExpanded ? 'Collapse' : 'Expand'}</span>
+                {isHintsExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </span>
+            </button>
+
+            {isHintsExpanded && (
+              <div className="mt-2.5 space-y-2 animate-fadeIn">
+                {challenge.hints.map((hint, idx) => (
+                  <div
+                    key={hint.id}
+                    className="rounded-lg bg-[#080b12] border border-slate-800/90 p-2.5 text-xs font-mono transition-colors"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-slate-300 font-bold flex items-center gap-1.5">
+                        {hint.isUnlocked ? (
+                          <Unlock className="w-3.5 h-3.5 text-[#00ff66]" />
+                        ) : (
+                          <Lock className="w-3.5 h-3.5 text-amber-400" />
+                        )}
+                        <span>Hint #{idx + 1}: {hint.title}</span>
+                      </span>
+
+                      {hint.isUnlocked ? (
+                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
+                          PURCHASED
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() =>
+                            setHintToUnlock({
+                              id: hint.id,
+                              cost: hint.cost,
+                              title: hint.title,
+                            })
+                          }
+                          disabled={challenge.isSolved || challenge.isLocked}
+                          className="text-[11px] font-bold text-amber-400 hover:text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 px-2.5 py-1 rounded border border-amber-500/40 transition-all shadow-[0_0_8px_rgba(245,158,11,0.2)] disabled:opacity-40"
+                        >
+                          Unlock (-{hint.cost} pts)
+                        </button>
+                      )}
+                    </div>
+
+                    {hint.isUnlocked && hint.content && (
+                      <div className="mt-2 text-slate-200 text-[11px] bg-[#0c101c] p-2.5 rounded border border-emerald-500/30 leading-relaxed font-mono flex items-start justify-between gap-2">
+                        <div className="break-words flex-1 font-mono">{hint.content}</div>
+                        <button
+                          onClick={() => copyToClipboard(hint.content!, hint.id)}
+                          className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-white shrink-0"
+                          title="Copy hint to clipboard"
+                        >
+                          {copiedHintId === hint.id ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Bottom Action Footer */}
+      <div className="p-5 sm:p-6 pt-0">
+        {/* Flag format banner & attempt indicator */}
+        <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 mb-2.5">
+          <div className="flex items-center gap-1">
+            <span className="text-slate-500 font-bold">FORMAT:</span>
+            <code className="text-emerald-400 bg-black/60 px-1.5 py-0.5 rounded border border-emerald-500/20">{challenge.flagFormat}</code>
+          </div>
+          <div className={`font-mono ${challenge.attemptsRemaining <= 1 && !challenge.isSolved ? 'text-red-400 font-bold animate-pulse' : 'text-slate-400'}`}>
+            ATTEMPTS: <span className="text-white font-bold">{challenge.attemptsUsed}</span>/{challenge.maxAttempts}
+          </div>
+        </div>
+
+        {/* Status Alert Banner */}
+        {statusMessage && (
+          <div
+            className={`p-2.5 rounded-lg mb-3 text-xs font-mono flex items-start gap-2 shadow-lg animate-fadeIn ${
+              statusMessage.type === 'success'
+                ? 'bg-emerald-950/80 border border-emerald-500/60 text-emerald-300'
+                : 'bg-red-950/80 border border-red-500/60 text-red-300'
+            }`}
+          >
+            {statusMessage.type === 'success' ? (
+              <Sparkles className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            )}
+            <span className="break-words leading-relaxed">{statusMessage.text}</span>
+          </div>
+        )}
+
+        {/* Interactive Solved / Locked / Terminal Prompt States */}
+        {challenge.isSolved ? (
+          <div className="w-full py-3 px-4 rounded-lg bg-emerald-500/15 border border-emerald-500/60 text-[#00ff66] font-mono text-xs font-black tracking-wider flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(0,255,102,0.25)]">
+            <CheckCircle2 className="w-4 h-4 text-[#00ff66]" />
+            <span>[DECRYPTED & CAPTURED]</span>
+          </div>
+        ) : challenge.isLocked ? (
+          <div className="w-full py-3 px-4 rounded-lg bg-red-950/40 border border-red-500/60 text-red-400 font-mono text-xs font-black tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(239,68,68,0.3)]">
+            <Lock className="w-4 h-4 text-red-400" />
+            <span>[LOCKED - 0/{challenge.maxAttempts} ATTEMPTS REMAINING]</span>
+          </div>
+        ) : (
+          <form onSubmit={handleFlagSubmit} className="flex gap-2">
+            {/* Terminal Command Prompt Input */}
+            <div className="relative flex-1 group">
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-slate-500 pointer-events-none font-mono text-xs">
+                <span className="text-[#00ff66] font-bold">$</span>
+              </div>
+              <input
+                type="text"
+                value={flagInput}
+                onChange={(e) => setFlagInput(e.target.value)}
+                placeholder="CTF{enter_secret_flag}"
+                disabled={isSubmitting}
+                className="w-full bg-[#080b12] border border-slate-700/80 focus:border-[#00ff66] focus:ring-1 focus:ring-[#00ff66] rounded-lg pl-8 pr-3 py-2.5 text-xs font-mono text-white placeholder-slate-600 outline-none transition-all shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] focus:shadow-[0_0_12px_rgba(0,255,102,0.25)] disabled:opacity-50"
+              />
+            </div>
+
+            {/* Neon Green Primary Submit Button */}
+            <button
+              type="submit"
+              disabled={isSubmitting || !flagInput.trim()}
+              className="px-4 py-2.5 bg-[#00ff66] hover:bg-[#00ff66]/85 disabled:opacity-40 text-black font-mono text-xs font-black tracking-wider uppercase rounded-lg flex items-center gap-1.5 transition-all shadow-[0_0_15px_rgba(0,255,102,0.4)] hover:shadow-[0_0_25px_rgba(0,255,102,0.6)] active:scale-95 shrink-0"
+            >
+              <span>{isSubmitting ? 'VALIDATING...' : 'SUBMIT'}</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </form>
+        )}
+
+        {/* Writeup Mode Access Drawer */}
+        {challenge.writeup && (
+          <div className="mt-3">
+            <button
+              onClick={() => onViewWriteup(challenge)}
+              className="w-full py-2 px-3 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/50 text-cyan-300 hover:text-white text-xs font-mono font-bold flex items-center justify-center gap-2 transition-all shadow-[0_0_12px_rgba(0,240,255,0.2)]"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
+              <span>VIEW OFFICIAL WRITEUP & DEBRIEF</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Hint Purchase Confirmation Dialog Modal */}
+      {hintToUnlock && (
+        <div className="absolute inset-0 bg-black/92 backdrop-blur-md z-30 flex flex-col items-center justify-center p-6 text-center animate-fadeIn border-2 border-amber-500/60">
+          <HelpCircle className="w-10 h-10 text-amber-400 mb-2 animate-bounce" />
+          <h4 className="text-sm font-bold font-mono text-white">
+            PURCHASE HINT: {hintToUnlock.title}?
+          </h4>
+          <p className="mt-2 text-xs text-amber-300 font-mono leading-relaxed max-w-xs">
+            Caution: <strong>-{hintToUnlock.cost} points</strong> will be deducted from this challenge's point reward upon capture.
+          </p>
+          <div className="flex items-center gap-3 mt-5">
+            <button
+              onClick={() => setHintToUnlock(null)}
+              disabled={isUnlockingHint}
+              className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white font-mono text-xs transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirmUnlockHint}
+              disabled={isUnlockingHint}
+              className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-mono font-black text-xs shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all"
+            >
+              {isUnlockingHint ? 'PURCHASING...' : `Confirm (-${hintToUnlock.cost} pts)`}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

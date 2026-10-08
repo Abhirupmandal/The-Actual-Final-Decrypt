@@ -1,0 +1,6 @@
+{
+  "name": "The Final Decrypt — Round 2: No Clue, No Mercy",
+  "description": "An elite cybersecurity CTF competition platform featuring real-time WebSockets, dynamic hint marketplace, dual-portal architecture, live scoreboard with tie-breaker logic, and anti-cheat telemetry.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

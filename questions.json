@@ -1,0 +1,334 @@
+[
+  {
+    "id": "chal-01",
+    "title": "Phantom Pixel Spectra",
+    "section": "Section A (Find the Clue, Find the Key)",
+    "category": "STEGO",
+    "points": 150,
+    "difficulty": "Medium",
+    "description": "An operative intercepted an undercover covert transmission disguised as a corporate logo. Deep in the LSB plane of the RGBA channels lies a concealed key phrase and an embedded flag payload.",
+    "flag": "CTF{lsb_st3g0_p1x3l_m45k_unv31l}",
+    "flagFormat": "CTF{...}",
+    "maxAttempts": 5,
+    "attachment": {
+      "fileName": "phantom_spectra_sample.png",
+      "mimeType": "image/png",
+      "size": "48.2 KB",
+      "content": "STEG_DATA_LSB_PLANE_INTERCEPT_STREAM_RAW_ALPHA_LAYER_CTF{lsb_st3g0_p1x3l_m45k_unv31l}"
+    },
+    "hints": [
+      {
+        "id": "h1",
+        "title": "Channel Inspection",
+        "cost": 25,
+        "content": "Examine the least significant bit (LSB) of the Blue and Alpha channels. Standard tools like zsteg or PIL bit-plane slicing will isolate the text stream."
+      },
+      {
+        "id": "h2",
+        "title": "Extraction Sequence",
+        "cost": 45,
+        "content": "The embedded string starts at pixel offset (0, 12) with ASCII byte alignment. Running `zsteg -a phantom_spectra.png` displays: CTF{lsb_st3g0_p1x3l_m45k_unv31l}"
+      }
+    ],
+    "writeup": {
+      "summary": "LSB Steganography extraction using RGBA plane mask",
+      "steps": [
+        "1. Analyzed image headers using pngcheck: standard PNG chunks with non-standard checksum in IDAT.",
+        "2. Ran bit-plane analysis across R0, G0, B0, A0 planes.",
+        "3. Found continuous ASCII stream in Blue LSB plane starting at offset 0x000c.",
+        "4. Executed `python3 -c \"from PIL import Image; img=Image.open('phantom_spectra.png'); ...\"` to extract binary stream.",
+        "5. Reconstructed ASCII flag: CTF{lsb_st3g0_p1x3l_m45k_unv31l}."
+      ]
+    }
+  },
+  {
+    "id": "chal-02",
+    "title": "Memory Dump: Infiltrator's Footprint",
+    "section": "Section A (Find the Clue, Find the Key)",
+    "category": "FORENSICS",
+    "points": 200,
+    "difficulty": "Medium",
+    "description": "A rogue employee dumped workstation RAM before pulling the Ethernet cable. Carve the active network socket buffer, locate the exfiltrated session token, and recover the flag.",
+    "flag": "CTF{m3m_dump_carv3d_jwt_s3cr3t_99}",
+    "flagFormat": "CTF{...}",
+    "maxAttempts": 5,
+    "attachment": {
+      "fileName": "volatility_sock_dump.raw",
+      "mimeType": "application/octet-stream",
+      "size": "128 KB",
+      "content": "MEMORY_DUMP_PROC_PID_4412_SOCKET_TCP_ESTABLISHED_BEARER_eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmbGFnIjoiQ1RGe20zbV9kdW1wX2NhcnYzZF9qd3RfczNjcjN0Xzk5fSJ9.SIG_VERIFIED"
+    },
+    "hints": [
+      {
+        "id": "h1",
+        "title": "PID & Socket Analysis",
+        "cost": 30,
+        "content": "Use `strings -a volatility_sock_dump.raw | grep -i 'bearer\\|jwt'` or Volatility 3 plugin `windows.netscan` on PID 4412."
+      },
+      {
+        "id": "h2",
+        "title": "JWT Payload Decoding",
+        "cost": 50,
+        "content": "The bearer token payload is base64url encoded: decode the second segment `eyJmbGFnIjoiQ1RGe2...` to reveal the json payload flag."
+      }
+    ],
+    "writeup": {
+      "summary": "RAM dump extraction and base64 JWT payload parsing",
+      "steps": [
+        "1. Loaded raw memory chunk into hex viewer and ran regex search for JWT standard header `eyJhbGci`.",
+        "2. Located matching string at offset 0x01E420 belonging to PID 4412 outbound socket.",
+        "3. Decoded base64 payload: `{\"flag\":\"CTF{m3m_dump_carv3d_jwt_s3cr3t_99}\"}`.",
+        "4. Validated flag signature against CTF validator."
+      ]
+    }
+  },
+  {
+    "id": "chal-03",
+    "title": "Operation Black Sky: Ghost Satellite",
+    "section": "Section A (Find the Clue, Find the Key)",
+    "category": "OSINT",
+    "points": 120,
+    "difficulty": "Easy",
+    "description": "A threat actor leaked an aerial satellite ground-station uplink identifier and a coordinate timestamp `48.8584° N, 2.2945° E | 13:37:00 UTC`. Identify the covert transmitter's ground station codename.",
+    "flag": "CTF{g5_eiffel_upl1nk_alpha_2026}",
+    "flagFormat": "CTF{...}",
+    "maxAttempts": 6,
+    "attachment": {
+      "fileName": "satellite_telemetry.log",
+      "mimeType": "text/plain",
+      "size": "12.4 KB",
+      "content": "TELEMETRY_LOG_V4\nTIMESTAMP: 2026-10-08T13:37:00Z\nLAT: 48.8584\nLON: 2.2945\nELEVATION: 330m\nTRANSMITTER_REGISTRY_ID: gs_eiffel_upl1nk_alpha_2026\nSIGNAL_LOCK: TRUE\nSTATUS: ACTIVE"
+    },
+    "hints": [
+      {
+        "id": "h1",
+        "title": "Geolocation Lookup",
+        "cost": 20,
+        "content": "Input `48.8584 N, 2.2945 E` into mapping services. Check the landmark structure and look inside the telemetry log for registry tags."
+      },
+      {
+        "id": "h2",
+        "title": "Telemetry Parsing",
+        "cost": 30,
+        "content": "The log explicitly details `TRANSMITTER_REGISTRY_ID: gs_eiffel_upl1nk_alpha_2026`. Wrap inside CTF{...}."
+      }
+    ],
+    "writeup": {
+      "summary": "OSINT coordinate mapping and telemetry registry matching",
+      "steps": [
+        "1. Geo-located coordinates to the Eiffel Tower in Paris, France.",
+        "2. Correlated with the telemetry log header.",
+        "3. Extracted registry tag `gs_eiffel_upl1nk_alpha_2026`.",
+        "4. Formatted flag: CTF{g5_eiffel_upl1nk_alpha_2026}."
+      ]
+    }
+  },
+  {
+    "id": "chal-04",
+    "title": "Subcarrier Spectrogram: Sonic Mirage",
+    "section": "Section A (Find the Clue, Find the Key)",
+    "category": "AUDIO",
+    "points": 180,
+    "difficulty": "Medium",
+    "description": "An SDR recording captured on 144.800 MHz contains high-frequency chirps and harmonic oscillations. Convert the audio waveform into a frequency spectrogram to read the visual inscription.",
+    "flag": "CTF{sp3ctr0_4ud10_sh1ft_v1su4l_w4v3}",
+    "flagFormat": "CTF{...}",
+    "maxAttempts": 5,
+    "attachment": {
+      "fileName": "intercept_144mhz_spectrogram.wav",
+      "mimeType": "audio/wav",
+      "size": "96 KB",
+      "content": "RIFF_WAV_SIMULATED_HEADER_FREQ_16000HZ_SPECTROGRAM_ENCODED:CTF{sp3ctr0_4ud10_sh1ft_v1su4l_w4v3}"
+    },
+    "hints": [
+      {
+        "id": "h1",
+        "title": "Visualizing Audio",
+        "cost": 25,
+        "content": "Open the audio file in Audacity or Sonic Visualiser. Switch the track display from Waveform to Spectrogram."
+      },
+      {
+        "id": "h2",
+        "title": "Spectrogram Window",
+        "cost": 45,
+        "content": "Set the FFT window to 2048 with Blackman-Harris windowing. Look in the 12 kHz to 18 kHz frequency band."
+      }
+    ],
+    "writeup": {
+      "summary": "Spectrogram analysis of ultrasonic audio modulated carrier",
+      "steps": [
+        "1. Loaded WAV file into Sonic Visualiser.",
+        "2. Added Spectrogram layer with 2048-point Hann window.",
+        "3. Glitched frequency bands clearly drew the alphanumeric glyphs: CTF{sp3ctr0_4ud10_sh1ft_v1su4l_w4v3}.",
+        "4. Confirmed flag submission."
+      ]
+    }
+  },
+  {
+    "id": "chal-05",
+    "title": "Chronos: The Elliptic Paradox",
+    "section": "Section B (The Decode Chamber)",
+    "category": "CRYPTO",
+    "points": 250,
+    "difficulty": "Hard",
+    "description": "The target authentication server signs challenge nonces using ECDSA over secp256k1. However, the random nonce `k` is generated from an insecure Linear Congruential Generator (LCG). Break the PRNG and forge the admin authorization flag.",
+    "flag": "CTF{3cd54_k_lcg_pr3d1ct4bl3_f0rg3}",
+    "flagFormat": "CTF{...}",
+    "maxAttempts": 4,
+    "attachment": {
+      "fileName": "chronos_ecdsa_signatures.py",
+      "mimeType": "text/x-python",
+      "size": "4.8 KB",
+      "content": "# CHRONOS ECDSA SIGNATURE ORACLE\n# Curve: secp256k1\n# LCG: k_{i+1} = (a * k_i + c) % n\n# Signatures:\n# sig1 = (r1, s1, z1)\n# sig2 = (r2, s2, z2)\nFLAG = 'CTF{3cd54_k_lcg_pr3d1ct4bl3_f0rg3}'"
+    },
+    "hints": [
+      {
+        "id": "h1",
+        "title": "Biased Nonce Relation",
+        "cost": 35,
+        "content": "Recall that $s_i \\equiv k_i^{-1} (z_i + r_i d) \\pmod n$. Since $k_2 = a \\cdot k_1 + c \\pmod n$, you can eliminate $k$ to express the private key $d$ directly."
+      },
+      {
+        "id": "h2",
+        "title": "Linear System Solution",
+        "cost": 65,
+        "content": "Substitute $k_1 = (z_1 + r_1 d)/s_1$ and $k_2 = (z_2 + r_2 d)/s_2$ into the LCG recurrence to solve for $d = (a z_1 s_2 - z_2 s_1 + c s_1 s_2)/(r_2 s_1 - a r_1 s_2) \\pmod n$."
+      }
+    ],
+    "writeup": {
+      "summary": "ECDSA Private Key recovery via predictable LCG nonce generator",
+      "steps": [
+        "1. Identified that ECDSA nonce generation violated RFC 6979 by using an LCG.",
+        "2. Formulated relation: s1 = k1^(-1)(z1 + r1*d) and s2 = k2^(-1)(z2 + r2*d).",
+        "3. Plugged in k2 = a*k1 + c mod n.",
+        "4. Derived algebraic formula for private key 'd'.",
+        "5. Computed d and signed admin query to retrieve: CTF{3cd54_k_lcg_pr3d1ct4bl3_f0rg3}."
+      ]
+    }
+  },
+  {
+    "id": "chal-06",
+    "title": "CyberCore: JMP to Nowhere",
+    "section": "Section B (The Decode Chamber)",
+    "category": "REV",
+    "points": 300,
+    "difficulty": "Hard",
+    "description": "A stripped ELF x86-64 executable implements an active anti-debugging ptrace trap and a custom Virtual Machine emulator with 8 virtual registers. Reverse the bytecode disassembly to recover the master flag.",
+    "flag": "CTF{vm_d1s4ss3mbly_x86_byt3c0d3_0x90}",
+    "flagFormat": "CTF{...}",
+    "maxAttempts": 5,
+    "attachment": {
+      "fileName": "cybercore_challenge.bin",
+      "mimeType": "application/octet-stream",
+      "size": "32.1 KB",
+      "content": "ELF_x86_64_SIMULATED_VM_PTRACE_TRAP_OPCODES_BYTECODE_VM_CTF{vm_d1s4ss3mbly_x86_byt3c0d3_0x90}"
+    },
+    "hints": [
+      {
+        "id": "h1",
+        "title": "Anti-Debug Bypass",
+        "cost": 40,
+        "content": "Patch the `ptrace(0, 0, 1, 0)` return check at offset `0x11AB` to NOPs (0x90) or preload `ptrace.c` returning 0."
+      },
+      {
+        "id": "h2",
+        "title": "VM Opcode Architecture",
+        "cost": 75,
+        "content": "The VM loop dispatches on `bytecode[pc++]`: 0x10=LOAD_IMM, 0x20=XOR_REG, 0x30=ROL_REG, 0x40=CMP_FLAG. Reversing the XOR-ROL cycle yields the flag."
+      }
+    ],
+    "writeup": {
+      "summary": "Anti-debug patching and custom bytecode VM reversal",
+      "steps": [
+        "1. Disassembled binary in IDA/Ghidra. Found PTRACE_TRACEME check.",
+        "2. Patched condition with 0x90 NOPs.",
+        "3. Identified bytecode dispatcher function with switch-case over 12 opcodes.",
+        "4. Wrote Python decompiler for the VM bytecode stream.",
+        "5. Inverted the XOR-ROL substitution table to extract: CTF{vm_d1s4ss3mbly_x86_byt3c0d3_0x90}."
+      ]
+    }
+  },
+  {
+    "id": "chal-07",
+    "title": "Quantum Vault: Race Condition & Exfiltration",
+    "section": "Section B (The Decode Chamber)",
+    "category": "WEB",
+    "points": 220,
+    "difficulty": "Medium",
+    "description": "An asynchronous transaction endpoint `/api/vault/transfer` allows concurrent balance withdrawals before database row locking. Drain the target reserve to reveal the high-value flag.",
+    "flag": "CTF{r4c3_c0nd1t10n_b4l4nc3_unl0ck_77}",
+    "flagFormat": "CTF{...}",
+    "maxAttempts": 5,
+    "attachment": {
+      "fileName": "vault_source_snippet.js",
+      "mimeType": "application/javascript",
+      "size": "3.5 KB",
+      "content": "// Async Vault Vulnerability Snippet\nasync function transfer(req, res) {\n  const balance = await getBalance(req.userId);\n  if (balance >= 100) {\n    await sleep(50); // DB delay gap\n    await deductBalance(req.userId, 100);\n    await addFlagCredit(req.userId);\n  }\n}"
+    },
+    "hints": [
+      {
+        "id": "h1",
+        "title": "Concurrency Exploit",
+        "cost": 30,
+        "content": "Notice the `await sleep(50)` between the balance validation and the debit transaction. Multiple concurrent requests will all pass the initial check."
+      },
+      {
+        "id": "h2",
+        "title": "Parallel Request Script",
+        "cost": 50,
+        "content": "Use `Promise.all([fetch(...), fetch(...), fetch(...)])` or `turbo-intruder` with HTTP/2 single-packet attack."
+      }
+    ],
+    "writeup": {
+      "summary": "Time-Of-Check to Time-Of-Use (TOCTOU) race condition exploit",
+      "steps": [
+        "1. Inspected source snippet: balance check occurs 50ms before deduction without atomic database transaction.",
+        "2. Fired 15 parallel POST requests via Python `aiohttp`.",
+        "3. All 15 requests validated against the initial 100 balance.",
+        "4. Account balance dropped to -1400 and triggered VIP tier flag reward: CTF{r4c3_c0nd1t10n_b4l4nc3_unl0ck_77}."
+      ]
+    }
+  },
+  {
+    "id": "chal-08",
+    "title": "Terminal Zero: Restricted Python Jailbreak",
+    "section": "Section B (The Decode Chamber)",
+    "category": "MISC",
+    "points": 180,
+    "difficulty": "Medium",
+    "description": "Break out of a Python 3.12 PyJail sandbox where `__builtins__`, `import`, `exec`, `eval`, quotes (`\"`, `'`), and square brackets are heavily sanitized.",
+    "flag": "CTF{pyj41l_subcl4ss35_0v3rfl0w_m4st3r}",
+    "flagFormat": "CTF{...}",
+    "maxAttempts": 5,
+    "attachment": {
+      "fileName": "pyjail_sandbox.py",
+      "mimeType": "text/x-python",
+      "size": "2.1 KB",
+      "content": "# Restricted Python Jail\nblacklist = ['import', 'eval', 'exec', 'os', 'sys', 'open', '\"', \"'\"]\ncode = input('>>> ')\nif any(w in code for w in blacklist):\n    print('BLOCKED')\nelse:\n    exec(code, {'__builtins__': {}})"
+    },
+    "hints": [
+      {
+        "id": "h1",
+        "title": "MRO Class Hierarchy Traversal",
+        "cost": 25,
+        "content": "Access classes via tuples: `().__class__.__base__.__subclasses__()` allows reaching built-in modules without importing."
+      },
+      {
+        "id": "h2",
+        "title": "Quoteless Character Generation",
+        "cost": 45,
+        "content": "Generate strings without quotes using `chr(...)` and lookup classes by iterating through `__subclasses__()`."
+      }
+    ],
+    "writeup": {
+      "summary": "Python object tree traversal and shell escape",
+      "steps": [
+        "1. Analyzed PyJail blacklist: quotes and typical builtins blocked.",
+        "2. Used `().__class__.__base__.__subclasses__()` to access loaded classes.",
+        "3. Located `os._wrap_close` or `builtins.file` wrapper.",
+        "4. Executed system read on flag environment variable.",
+        "5. Captured flag: CTF{pyj41l_subcl4ss35_0v3rfl0w_m4st3r}."
+      ]
+    }
+  }
+]
