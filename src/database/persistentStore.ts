@@ -561,14 +561,16 @@ class SqliteChallengeStore {
       if (fs.existsSync(questionsJsonPath)) {
         const raw = fs.readFileSync(questionsJsonPath, 'utf-8');
         const list: Partial<Challenge>[] = JSON.parse(raw);
+        const syncedIds = new Set<string>();
         let count = 0;
         for (const p of list) {
           const id = p.id || 'chal-' + crypto.randomUUID().slice(0, 6);
+          syncedIds.add(id);
           const existing = this.challenges.get(id);
           const chal: Challenge = {
             id,
             title: p.title || existing?.title || 'Untitled Challenge',
-            section: (p.section as any) || existing?.section || 'Section A (Find the Clue, Find the Key)',
+            section: (p.section as any) || existing?.section || 'Section A',
             category: (p.category as any) || existing?.category || 'MISC',
             points: typeof p.points === 'number' ? p.points : existing?.points ?? 100,
             difficulty: (p.difficulty as any) || existing?.difficulty || 'Medium',
@@ -586,6 +588,19 @@ class SqliteChallengeStore {
           this.challenges.set(id, chal);
           this.insertOrUpdateSqlite(chal);
           count++;
+        }
+        // Remove any challenges in DB that are not in questions.json
+        for (const [id] of this.challenges) {
+          if (!syncedIds.has(id)) {
+            this.challenges.delete(id);
+            try {
+              const delStmt = this.db.prepare('DELETE FROM challenges WHERE id = ?;');
+              delStmt.run([id]);
+              delStmt.free();
+            } catch (delErr) {
+              console.warn('[SQLite Database] Failed to delete obsolete challenge:', id, delErr);
+            }
+          }
         }
         this.syncFn();
         console.log(`[SQLite Database] Successfully synced ${count} challenges from questions.json into ctf_database.sqlite`);
@@ -605,10 +620,37 @@ class SqliteChallengeStore {
     return this.challenges.get(id);
   }
 
+  public exportToQuestionsJson(questionsJsonPath?: string): void {
+    try {
+      const targetPath = questionsJsonPath || path.join(PROJECT_ROOT, 'questions.json');
+      const list = Array.from(this.challenges.values()).map((c) => ({
+        id: c.id,
+        title: c.title,
+        section: c.section,
+        category: c.category,
+        points: c.points,
+        difficulty: c.difficulty,
+        description: c.description,
+        flag: c.flag,
+        flagFormat: c.flagFormat || 'CTF{...}',
+        maxAttempts: c.maxAttempts || 5,
+        attachment: c.attachment,
+        hints: c.hints || [],
+        writeup: c.writeup,
+        isEnabled: c.isEnabled,
+      }));
+      fs.writeFileSync(targetPath, JSON.stringify(list, null, 2), 'utf-8');
+      console.log(`[Questions Storage] Exported ${list.length} challenges to ${targetPath}`);
+    } catch (err) {
+      console.error('[Questions Storage] Error exporting challenges to questions.json:', err);
+    }
+  }
+
   public create(c: Challenge): Challenge {
     this.challenges.set(c.id, c);
     this.insertOrUpdateSqlite(c);
     this.syncFn();
+    this.exportToQuestionsJson();
     return c;
   }
 
@@ -623,6 +665,7 @@ class SqliteChallengeStore {
     this.challenges.set(id, updated);
     this.insertOrUpdateSqlite(updated);
     this.syncFn();
+    this.exportToQuestionsJson();
     return updated;
   }
 
@@ -631,6 +674,7 @@ class SqliteChallengeStore {
     this.challenges.delete(id);
     this.db.run('DELETE FROM challenges WHERE id = ?;', [id]);
     this.syncFn();
+    this.exportToQuestionsJson();
     return true;
   }
 

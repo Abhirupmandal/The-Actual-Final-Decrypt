@@ -6,6 +6,7 @@ const ALLOWED_EXTENSIONS = new Set([
   '.jpg',
   '.jpeg',
   '.gif',
+  '.svg',
   '.wav',
   '.mp3',
   '.txt',
@@ -36,7 +37,6 @@ const FORBIDDEN_EXTENSIONS = new Set([
   '.scr',
   '.pl',
   '.jar',
-  '.svg', // Blocks SVG Stored-XSS injection
   '.html',
   '.htm',
   '.xhtml',

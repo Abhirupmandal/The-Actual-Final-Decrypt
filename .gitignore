@@ -4,11 +4,15 @@ dist/
 coverage/
 .DS_Store
 *.log
+!attachments/*.log
+__pycache__/
+*.pyc
 .env*
 !.env.example
 data/*.sqlite*
 data/*.key
 data/*.tmp*
 data/*.json
+
 
 

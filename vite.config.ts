@@ -23,6 +23,8 @@ export default defineConfig(() => {
           '**/*.sqlite-journal*',
           '**/dist/**',
           '**/*.tmp*',
+          '**/questions.json',
+          '**/attachments/**',
         ],
       },
     },

@@ -1,0 +1,14 @@
+User-agent: *
+Disallow: /admin/
+Disallow: /backup/
+Disallow: /staging/
+Disallow: /tmp/
+Disallow: /old/
+Disallow: /private/
+Disallow: /cgi-bin/
+Disallow: /logs/
+Disallow: /internal/
+Disallow: /dev/
+Sitemap: https://decrypt.local/sitemap.xml
+
+# TODO: remove before launch -> CTF{r0b0ts_t3ll_n0_l13s}

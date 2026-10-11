@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200" viewBox="0 0 400 200">
+  <rect width="400" height="200" fill="#0a0e14"/>
+  <text x="200" y="105" font-family="monospace" font-size="28" fill="#00ff88" text-anchor="middle">THE FINAL DECRYPT</text>
+  <!-- design v2 exported by intern. internal note: CTF{v13w_s0urc3_r3v34ls_4ll} -->
+  <circle cx="200" cy="150" r="6" fill="#00ff88"/>
+</svg>

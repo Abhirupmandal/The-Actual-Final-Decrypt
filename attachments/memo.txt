@@ -1,0 +1,44 @@
+MEMO - CONFIDENTIAL 	    		
+From: Operations 	 	 	  
+To: All Teams 	   		 
+Subject: Quarterly security review 				 		
+ 			 			
+Please review the attached policy before Friday. 		 	   
+Access cards must be worn at all times.  		   	
+Visitors must be escorted in secure areas. 			 	  
+Report lost devices within 24 hours.  		  		
+Passwords must be rotated every 90 days. 			  		
+Backups run nightly at 02:00. 			    
+The server room is off limits without approval.  		 	  
+Phishing drills will continue this quarter. 		   		
+Update your laptops when prompted.  		  		
+Do not share credentials over chat. 	 					
+Shred sensitive printouts after use. 		 	   
+Lock your screen when stepping away.  		   	
+Contact the helpdesk for any questions. 		  	  
+Thank you for your cooperation.  		  		
+Training sessions start next Monday. 			  		
+Attendance is mandatory for all staff. 	 					
+Slides will be circulated afterwards. 			 			
+Incident drills will be unannounced. 		 	   
+Remember: security is everyone's job.  		 	  
+Keep USB drives out of workstations. 			 	  
+Report suspicious emails immediately. 	 					
+Badge readers will be upgraded in Q4. 				  	
+Vendors must sign the NDA before entry.  		    
+Multi-factor is now required. 			 	 	
+VPN access is logged and reviewed. 	 					
+Old accounts will be disabled. 		   		
+Audit results arrive next month.  		 	  
+Please keep this memo confidential. 		 			 
+Compliance is being tracked. 			 	  
+Thank you again. 	 					
+Regards, 			  		
+Operations Team  		  		
+  		  		
+End of memo. 					 	
+-- 40 chars of silence below --
+Nothing else follows.
+Really nothing.
+Goodbye.
+.
