@@ -1589,7 +1589,14 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 {challenges.map((c) => (
                   <tr key={c.id} className="hover:bg-slate-800/30">
                     <td className="py-3 px-4">
-                      <div className="font-bold text-white">{c.title}</div>
+                      <div className="font-bold text-white flex items-center gap-2 flex-wrap">
+                        <span>{c.title}</span>
+                        {c.attachment && (
+                          <span className="text-[10px] font-mono font-normal px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                            📎 {c.attachment.fileName} ({c.attachment.size})
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[10px] text-slate-400">{c.section}</div>
                     </td>
                     <td className="py-3 px-4">
@@ -3165,8 +3172,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     onChange={(e) => setEditingChallenge({ ...editingChallenge, section: e.target.value as any })}
                     className="w-full bg-[#080b12] border border-slate-700 rounded px-2 py-1.5 text-white"
                   >
-                    <option value="Section A (Find the Clue, Find the Key)">Section A</option>
-                    <option value="Section B (The Decode Chamber)">Section B</option>
+                    <option value="Section A">Section A</option>
+                    <option value="Section B">Section B</option>
+                    <option value="Section A (Find the Clue, Find the Key)">Section A (Find the Clue, Find the Key)</option>
+                    <option value="Section B (The Decode Chamber)">Section B (The Decode Chamber)</option>
                   </select>
                 </div>
 
@@ -3372,7 +3381,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 <div className="flex items-center gap-2">
                   <input
                     type="file"
-                    accept=".png,.jpg,.jpeg,.gif,.wav,.mp3,.txt,.log,.py,.c,.cpp,.bin,.raw,.pcap,.zip,.json,.dump"
+                    accept=".png,.jpg,.jpeg,.gif,.svg,.wav,.mp3,.txt,.log,.py,.c,.cpp,.bin,.raw,.pcap,.zip,.json,.dump"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (!file) return;
@@ -3386,7 +3395,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
                       // Security extension check
                       const ext = '.' + file.name.split('.').pop()?.toLowerCase();
-                      const forbidden = ['.php', '.phtml', '.exe', '.sh', '.bat', '.cmd', '.msi', '.vbs', '.svg', '.html', '.js'];
+                      const forbidden = ['.php', '.phtml', '.exe', '.sh', '.bat', '.cmd', '.msi', '.vbs', '.html', '.js'];
                       if (forbidden.includes(ext)) {
                         setAttachmentError(`Security Violation: File extension ${ext} is strictly blacklisted.`);
                         e.target.value = '';
@@ -3394,9 +3403,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       }
 
                       setAttachmentError(null);
+                      const isTextFile = /\.(txt|log|py|c|cpp|json|svg|md)$/i.test(ext);
                       const reader = new FileReader();
                       reader.onload = () => {
-                        const content = reader.result as string;
+                        let content = reader.result as string;
+                        if (!isTextFile && typeof content === 'string') {
+                          const commaIndex = content.indexOf(',');
+                          if (commaIndex !== -1) {
+                            content = 'base64:' + content.slice(commaIndex + 1);
+                          }
+                        }
                         setEditingChallenge({
                           ...editingChallenge,
                           attachment: {
@@ -3407,7 +3423,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           },
                         });
                       };
-                      reader.readAsText(file);
+                      if (isTextFile) {
+                        reader.readAsText(file);
+                      } else {
+                        reader.readAsDataURL(file);
+                      }
                     }}
                     className="text-[11px] text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-bold file:bg-slate-800 file:text-emerald-400 hover:file:bg-slate-700"
                   />

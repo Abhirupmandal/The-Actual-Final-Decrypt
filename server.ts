@@ -397,9 +397,11 @@ function broadcastState() {
   invalidateLeaderboardCache();
   const sorted = getSortedLeaderboard();
   leaderboardStore.syncLeaderboard(sorted); // Persist evaluated rankings to SQLite leaderboard table
+  redisCache.invalidate('cache:state');
   io.emit('state_update', {
     competitionState,
     leaderboard: sorted,
+    challenges: getPublicChallengesForTeam(),
   });
 }
 
@@ -449,7 +451,7 @@ function getPublicChallengesForTeam(team?: Team): PublicChallengeView[] {
 // Seed & Load Challenges from SQLite persistent database
 function loadInitialQuestions() {
   try {
-    challengeStore.syncFromQuestionsJson(path.join(__dirname, 'questions.json'));
+    challengeStore.seedFromQuestionsJsonIfEmpty(path.join(__dirname, 'questions.json'));
     challenges = challengeStore.getAll();
     challengeMap.clear();
     for (const chal of challenges) {
@@ -1635,9 +1637,13 @@ app.get('/api/challenges/:id/attachment', (req: Request, res: Response) => {
     return res.status(404).json({ success: false, error: 'Artifact attachment not found.' });
   }
 
+  const diskPath = path.join(__dirname, 'attachments', chal.attachment.fileName);
+  const diskExists = fs.existsSync(diskPath);
+  const fileSize = diskExists ? fs.statSync(diskPath).size : Buffer.byteLength(chal.attachment.content || '');
+
   const validation = validateFileAttachment(
     chal.attachment.fileName,
-    Buffer.byteLength(chal.attachment.content)
+    fileSize
   );
 
   if (!validation.valid) {
@@ -1705,6 +1711,14 @@ app.get('/api/challenges/:id/attachment', (req: Request, res: Response) => {
     }
   }
 
+  if (diskExists) {
+    return res.sendFile(diskPath);
+  }
+
+  if (chal.attachment.content && chal.attachment.content.startsWith('base64:')) {
+    return res.send(Buffer.from(chal.attachment.content.slice(7), 'base64'));
+  }
+
   res.send(chal.attachment.content);
 });
 
@@ -1758,6 +1772,14 @@ app.get('/api/challenges/:id/artifact/data', (req: Request, res: Response) => {
   const isCsv = ext === '.csv' || ext === '.tsv';
   const isText = isCsv || /^\.(txt|log|py|c|cpp|sh|json|md|env|yml|yaml|asm|hex)$/i.test(ext) || mimeType.startsWith('text/');
 
+  let rawContent = content;
+  const diskPath = path.join(__dirname, 'attachments', fileName);
+  if (fs.existsSync(diskPath) && isText) {
+    try {
+      rawContent = fs.readFileSync(diskPath, 'utf-8');
+    } catch {}
+  }
+
   res.json({
     success: true,
     id: chal.id,
@@ -1770,7 +1792,7 @@ app.get('/api/challenges/:id/artifact/data', (req: Request, res: Response) => {
     isPdf,
     isText,
     isCsv,
-    rawContent: content,
+    rawContent,
     viewUrl: `/api/challenges/${chal.id}/attachment?view=inline`,
     downloadUrl: `/api/challenges/${chal.id}/attachment`,
   });
@@ -2440,6 +2462,7 @@ app.post('/api/admin/challenges', requireAdminAuth, (req: Request, res: Response
     flag: data.flag.trim(),
     flagFormat: data.flagFormat || 'CTF{...}',
     maxAttempts: data.maxAttempts || 5,
+    attachment: data.attachment || req.body.attachment || undefined,
     hints: Array.isArray(req.body.hints)
       ? req.body.hints.map((h: any, idx: number) => ({
           id: h.id || `hint-${Date.now()}-${idx + 1}`,
@@ -2479,7 +2502,7 @@ app.put('/api/admin/challenges/:id', requireAdminAuth, (req: Request, res: Respo
   const chal = challenges.find((c) => c.id === req.params.id);
   if (!chal) return res.status(404).json({ success: false, error: 'Challenge not found' });
 
-  const { title, section, category, points, difficulty, description, flag, maxAttempts, isEnabled, hints, writeup } = req.body;
+  const { title, section, category, points, difficulty, description, flag, maxAttempts, isEnabled, hints, writeup, attachment } = req.body;
   if (title) chal.title = sanitizeInput(title);
   if (section) chal.section = section;
   if (category) chal.category = category;
@@ -2489,6 +2512,7 @@ app.put('/api/admin/challenges/:id', requireAdminAuth, (req: Request, res: Respo
   if (flag) chal.flag = flag.trim();
   if (typeof maxAttempts === 'number') chal.maxAttempts = Math.max(1, Math.min(100, maxAttempts));
   if (typeof isEnabled === 'boolean') chal.isEnabled = isEnabled;
+  if (attachment !== undefined) chal.attachment = attachment;
   if (Array.isArray(hints)) {
     chal.hints = hints.map((h: any, idx: number) => ({
       id: h.id || `hint-${Date.now()}-${idx + 1}`,

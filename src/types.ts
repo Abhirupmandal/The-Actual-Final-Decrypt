@@ -10,7 +10,9 @@ export type ChallengeCategory =
 
 export type ChallengeSection =
   | 'Section A (Find the Clue, Find the Key)'
-  | 'Section B (The Decode Chamber)';
+  | 'Section B (The Decode Chamber)'
+  | 'Section A'
+  | 'Section B';
 
 export interface Hint {
   id: string;

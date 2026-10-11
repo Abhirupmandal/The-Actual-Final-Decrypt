@@ -104,6 +104,8 @@ export const ChallengeAdminSchema = z.object({
   section: z.enum([
     'Section A (Find the Clue, Find the Key)',
     'Section B (The Decode Chamber)',
+    'Section A',
+    'Section B',
   ]),
   category: z.enum([
     'CRYPTO',
@@ -130,6 +132,14 @@ export const ChallengeAdminSchema = z.object({
         content: z.string(),
       })
     )
+    .optional(),
+  attachment: z
+    .object({
+      fileName: z.string(),
+      mimeType: z.string().optional(),
+      size: z.string().optional(),
+      content: z.string(),
+    })
     .optional(),
 });
 
