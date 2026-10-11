@@ -13,6 +13,11 @@ import type {
   SecurityLog,
   LeaderboardEntry,
   PublicChallengeView,
+  ScreenshotAlert,
+  AuditActorType,
+  AuditActionType,
+  AuditLog,
+  FeedbackSubmission,
 } from './src/types.ts';
 import {
   TeamRegistrationSchema,
@@ -45,6 +50,18 @@ import {
   createAuthRateLimiter,
 } from './src/security/expressRateLimitRedis.ts';
 import { redisCache } from './src/security/redisCache.ts';
+import {
+  teamStore,
+  challengeStore,
+  screenshotStore,
+  securityLogStore,
+  activityFeedStore,
+  competitionStateStore,
+  submissionStore,
+  leaderboardStore,
+  auditLogStore,
+  feedbackStore,
+} from './src/database/persistentStore.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -64,6 +81,16 @@ const io = new SocketIOServer(server, {
 // 6.) Information Leak Prevention: Disable Express default fingerprint header
 app.disable('x-powered-by');
 
+// Global OWASP Security Headers (Harden against clickjacking, sniffing, and MIME confusion)
+app.use((_req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '0');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
+
 // Load Balancer Health Probe
 app.get(['/health', '/api/health'], (req: Request, res: Response) => {
   res.json({
@@ -77,6 +104,11 @@ app.get(['/health', '/api/health'], (req: Request, res: Response) => {
       forwardedFor: req.headers['x-forwarded-for'] || null,
       clientIp: getClientIp(req),
     },
+    database: {
+      engine: 'SQLite 3',
+      file: 'data/ctf_database.sqlite',
+      teamsCount: teamStore.count,
+    },
     cacheMetrics: redisCache.getMetrics(),
     totalTeams: teams.size,
   });
@@ -86,24 +118,82 @@ app.get(['/health', '/api/health'], (req: Request, res: Response) => {
 app.use(express.json({ limit: '5mb' }));
 
 // 4.) Secret Management: Environment variables with secure derivation
-const PORT = 3000;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const ADMIN_USER_ID = (process.env.ADMIN_USER_ID || 'sys_ctrl_9f8a2b1e7c_root').trim();
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'CyberZero#2026!';
+const ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'Rabum Alal').trim();
+const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@finaldecrypt.ctf').trim();
+const ADMIN_ROUTE_SECRET = (process.env.ADMIN_ROUTE_SECRET || '/portal-auth-ctrl-8f9b2').trim();
 
-// --- In-Memory State & Cache Store (Redis-grade performance) ---
+// --- Management Team & Organizer Multi-Operator Registry ---
+// Allows the Lead (Rabum Alal) to grant access to 5-6 management team members secretly
+interface ManagementOperator {
+  username: string;
+  passkey: string;
+  role: 'lead' | 'arbiter' | 'manager' | 'coordinator';
+  displayName: string;
+}
+
+const defaultManagementOperators: ManagementOperator[] = [
+  { username: ADMIN_USER_ID.toLowerCase(), passkey: ADMIN_PASSWORD, role: 'lead', displayName: 'System Controller' },
+  { username: 'rabum alal', passkey: ADMIN_PASSWORD, role: 'lead', displayName: 'Rabum Alal' },
+  { username: 'rabumalal', passkey: ADMIN_PASSWORD, role: 'lead', displayName: 'Rabum Alal' },
+  { username: 'arbiter-1', passkey: ADMIN_PASSWORD, role: 'arbiter', displayName: 'Arbiter-1' },
+  { username: 'arbiter-2', passkey: ADMIN_PASSWORD, role: 'arbiter', displayName: 'Arbiter-2' },
+  { username: 'arbiter-3', passkey: ADMIN_PASSWORD, role: 'arbiter', displayName: 'Arbiter-3' },
+  { username: 'arbiter-4', passkey: ADMIN_PASSWORD, role: 'arbiter', displayName: 'Arbiter-4' },
+  { username: 'arbiter-5', passkey: ADMIN_PASSWORD, role: 'arbiter', displayName: 'Arbiter-5' },
+  { username: 'arbiter-6', passkey: ADMIN_PASSWORD, role: 'arbiter', displayName: 'Arbiter-6' },
+  { username: 'management', passkey: ADMIN_PASSWORD, role: 'manager', displayName: 'Management Team' },
+];
+
+function getManagementOperators(): ManagementOperator[] {
+  const customConfig = process.env.MANAGEMENT_TEAM;
+  if (!customConfig) return defaultManagementOperators;
+  try {
+    if (customConfig.startsWith('[')) {
+      return JSON.parse(customConfig);
+    }
+    const parsed: ManagementOperator[] = [...defaultManagementOperators];
+    customConfig.split(',').forEach((entry, idx) => {
+      const parts = entry.split(':');
+      if (parts[0]) {
+        const u = parts[0].trim();
+        const p = (parts[1] || ADMIN_PASSWORD).trim();
+        parsed.unshift({
+          username: u.toLowerCase(),
+          passkey: p,
+          role: idx === 0 ? 'lead' : 'arbiter',
+          displayName: u,
+        });
+      }
+    });
+    return parsed;
+  } catch (e) {
+    console.warn('[Management Auth] Could not parse MANAGEMENT_TEAM config:', e);
+  }
+  return defaultManagementOperators;
+}
+
+// --- High-Scale Inverted Indexes & Cache Stores (Engineered for 1,000+ Concurrent Students) ---
 let challenges: Challenge[] = [];
+const challengeMap = new Map<string, Challenge>(); // O(1) challenge lookups
 const teams = new Map<string, Team>();
-let activityFeed: ActivityFeedEvent[] = [];
-let securityLogs: SecurityLog[] = [];
+const teamNameLowerIndex = new Map<string, string>(); // lowercase teamName -> teamId for O(1) auth & collision checks
+let activityFeed: ActivityFeedEvent[] = activityFeedStore.getRecent(250);
+let securityLogs: SecurityLog[] = securityLogStore.getAll(300);
 
-// Competition State
-const competitionState: CompetitionState = {
+// Competition State - Persisted in SQLite config store
+const defaultCompetitionState: CompetitionState = {
   status: 'running',
   startTime: Date.now(),
   durationSeconds: 7200, // 2 hours
   remainingSeconds: 7200,
   writeupMode: false,
+  matrixRainSpeed: 1.0,
   announcement: null,
 };
+const competitionState: CompetitionState = competitionStateStore.getState(defaultCompetitionState);
 
 // --- Helper Functions ---
 function getClientIp(req: Request): string {
@@ -132,8 +222,74 @@ function logSecurityEvent(
   };
   securityLogs.unshift(log);
   if (securityLogs.length > 300) securityLogs.pop();
+  securityLogStore.add(log); // Persist to SQLite
   io.emit('security_alert', log);
 }
+
+function recordUserActivity(event: ActivityFeedEvent) {
+  activityFeed.unshift(event);
+  if (activityFeed.length > 250) activityFeed.pop();
+  activityFeedStore.add(event); // Persist to SQLite
+  io.emit('activity_event', event);
+}
+
+function recordAuditLog(
+  actorType: AuditActorType,
+  actorIdentifier?: string | null,
+  actionType?: AuditActionType | string,
+  details?: Record<string, any> | string | null,
+  ipAddress?: string | null
+): AuditLog {
+  const log = auditLogStore.add({
+    actorType: actorType || 'SYSTEM',
+    actorIdentifier: actorIdentifier || 'SYSTEM',
+    actionType: (actionType as AuditActionType) || 'SYSTEM_INFO',
+    details: details ?? {},
+    ipAddress: ipAddress || '127.0.0.1',
+  });
+  io.emit('audit:new_log', log);
+  return log;
+}
+
+// ======================== STEALTH ADMIN 404 HONEYPOT ========================
+// Scanner and participant probing against standard admin routes must return standard 404
+const HONEYPOT_ADMIN_PATHS = new Set([
+  '/admin',
+  '/admin/',
+  '/dashboard/admin',
+  '/dashboard/admin/',
+  '/login/admin',
+  '/login/admin/',
+  '/admin-portal',
+  '/admin-portal/',
+  '/portal/admin',
+  '/portal/admin/',
+  '/wp-admin',
+  '/cpanel',
+  '/admin.php',
+]);
+
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const normalizedPath = req.path.toLowerCase().replace(/\/+$/, '') || '/';
+  if (HONEYPOT_ADMIN_PATHS.has(normalizedPath) || HONEYPOT_ADMIN_PATHS.has(req.path.toLowerCase())) {
+    logSecurityEvent(
+      'ADMIN_PROBE_BLOCKED',
+      `Stealth blocked probing request to honeypot path: ${req.path}`,
+      getClientIp(req),
+      undefined,
+      'medium'
+    );
+    return res.status(404).type('text/html').send(`<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>404 Not Found</title></head>
+<body style="font-family:sans-serif;text-align:center;padding:50px;background:#fff;color:#222;">
+  <h1>404 Not Found</h1>
+  <p>The requested URL ${sanitizeInput(req.path)} was not found on this server.</p>
+</body>
+</html>`);
+  }
+  next();
+});
 
 // 1.) Global API Rate Limiter Middleware
 app.use('/api', (req: Request, res: Response, next: NextFunction) => {
@@ -156,32 +312,62 @@ app.use('/api', (req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+// High-Throughput Leaderboard Cache (Sub-millisecond retrieval for 1,000+ teams)
+let cachedLeaderboard: LeaderboardEntry[] | null = null;
+let lastLeaderboardCalc = 0;
+
+function invalidateLeaderboardCache() {
+  cachedLeaderboard = null;
+  redisCache.invalidate('cache:state:public');
+  redisCache.invalidate('cache:leaderboard');
+}
+
 // Tie-Breaker algorithm:
 // 1. Disqualified teams pushed to bottom
 // 2. Highest score
 // 3. Earliest timestamp reaching that score
 // 4. Fewer total incorrect attempts
 function getSortedLeaderboard(): LeaderboardEntry[] {
+  const now = Date.now();
+  if (cachedLeaderboard && now - lastLeaderboardCalc < 1000) {
+    return cachedLeaderboard;
+  }
+
   const teamList = Array.from(teams.values());
 
   teamList.sort((a, b) => {
-    // Disqualified teams placed at bottom
+    // 1. Disqualified teams placed at bottom
     if (Boolean(a.isDisqualified) !== Boolean(b.isDisqualified)) {
       return a.isDisqualified ? 1 : -1;
     }
+
+    // 2. Point scoring teams (score > 0) ALWAYS come before teams who have 0 points (did not participate yet)
+    const aHasPoints = a.score > 0;
+    const bHasPoints = b.score > 0;
+    if (aHasPoints !== bHasPoints) {
+      return aHasPoints ? -1 : 1;
+    }
+
+    // 3. For point-scoring teams: strictly highest points first (most points takes 1st place)
     if (b.score !== a.score) {
       return b.score - a.score;
     }
+
+    // 4. Tie-breakers:
+    // Earliest timestamp reaching that score
     if (a.lastSolveTime !== b.lastSolveTime) {
+      if (a.lastSolveTime === 0) return 1;
+      if (b.lastSolveTime === 0) return -1;
       return a.lastSolveTime - b.lastSolveTime;
     }
+    // Fewer total incorrect attempts
     if (a.totalFailedAttempts !== b.totalFailedAttempts) {
       return a.totalFailedAttempts - b.totalFailedAttempts;
     }
     return a.registeredAt - b.registeredAt;
   });
 
-  return teamList.map((team, idx) => ({
+  const sorted: LeaderboardEntry[] = teamList.map((team, idx) => ({
     rank: idx + 1,
     teamId: team.id,
     teamName: team.teamName,
@@ -194,16 +380,26 @@ function getSortedLeaderboard(): LeaderboardEntry[] {
     isDisqualified: Boolean(team.isDisqualified),
     isFlaggedAnomaly: team.isFlaggedAnomaly,
   }));
+
+  cachedLeaderboard = sorted;
+  lastLeaderboardCalc = now;
+  return sorted;
 }
 
 function broadcastLeaderboard() {
-  io.emit('leaderboard_update', getSortedLeaderboard());
+  invalidateLeaderboardCache();
+  const sorted = getSortedLeaderboard();
+  leaderboardStore.syncLeaderboard(sorted); // Persist evaluated rankings to SQLite leaderboard table
+  io.emit('leaderboard_update', sorted);
 }
 
 function broadcastState() {
+  invalidateLeaderboardCache();
+  const sorted = getSortedLeaderboard();
+  leaderboardStore.syncLeaderboard(sorted); // Persist evaluated rankings to SQLite leaderboard table
   io.emit('state_update', {
     competitionState,
-    leaderboard: getSortedLeaderboard(),
+    leaderboard: sorted,
   });
 }
 
@@ -250,32 +446,18 @@ function getPublicChallengesForTeam(team?: Team): PublicChallengeView[] {
     });
 }
 
-// Seed Initial Questions from questions.json
+// Seed & Load Challenges from SQLite persistent database
 function loadInitialQuestions() {
   try {
-    const raw = fs.readFileSync(path.join(__dirname, 'questions.json'), 'utf-8');
-    const parsed: Partial<Challenge>[] = JSON.parse(raw);
-    challenges = parsed.map((p) => ({
-      id: p.id || 'chal-' + crypto.randomUUID().slice(0, 6),
-      title: p.title || 'Untitled Challenge',
-      section: p.section || 'Section A (Find the Clue, Find the Key)',
-      category: p.category || 'MISC',
-      points: p.points || 100,
-      difficulty: p.difficulty || 'Medium',
-      description: p.description || '',
-      flag: p.flag || 'CTF{dummy}',
-      flagFormat: p.flagFormat || 'CTF{...}',
-      maxAttempts: p.maxAttempts || 5,
-      attachment: p.attachment,
-      hints: p.hints || [],
-      writeup: p.writeup,
-      isEnabled: true,
-      solvesCount: 0,
-      firstBloodTeam: null,
-    }));
-    console.log(`[CTF Core] Loaded ${challenges.length} challenges from questions.json`);
+    challengeStore.syncFromQuestionsJson(path.join(__dirname, 'questions.json'));
+    challenges = challengeStore.getAll();
+    challengeMap.clear();
+    for (const chal of challenges) {
+      challengeMap.set(chal.id, chal);
+    }
+    console.log(`[SQLite Database] Successfully loaded & indexed ${challenges.length} challenges from SQLite database`);
   } catch (err) {
-    console.error('[CTF Core] Failed to load questions.json, initializing default array', err);
+    console.error('[SQLite Database] Failed to load challenges from SQLite store:', err);
   }
 }
 
@@ -330,7 +512,7 @@ function seedDemoTeams() {
     const teamSolves: Record<string, { solvedAt: number; pointsAwarded: number; isFirstBlood: boolean }> = {};
 
     d.solves.forEach((chalId) => {
-      const chal = challenges.find((c) => c.id === chalId);
+      const chal = challengeMap.get(chalId) || challenges.find((c) => c.id === chalId);
       if (chal) {
         chal.solvesCount++;
         const isFB = d.firstBloods.includes(chalId);
@@ -361,6 +543,9 @@ function seedDemoTeams() {
       isDisqualified: false,
       isFlaggedAnomaly: false,
     });
+
+    teamNameLowerIndex.set(d.teamName.toLowerCase(), id);
+    redisCache.zadd('ctf:leaderboard:zset', d.score, id);
   });
 
   activityFeed = [
@@ -438,8 +623,33 @@ function clearDemoTeams() {
   broadcastState();
 }
 
+// Load & Index All Persistent Registered Teams From Database Store
+function loadPersistedTeams() {
+  const persisted = teamStore.getAll();
+  persisted.forEach((t) => {
+    // Only Admin Arbitration has the authority to disqualify a team. Clear previous automatic disqualifications.
+    if (
+      t.isDisqualified &&
+      !t.disqualifiedReason?.toLowerCase().includes('manual') &&
+      !t.disqualifiedReason?.toLowerCase().includes('admin arbitration')
+    ) {
+      t.isDisqualified = false;
+      t.disqualifiedReason = undefined;
+      t.disqualifiedAt = undefined;
+      teamStore.update(t.id, { isDisqualified: false, disqualifiedReason: undefined, disqualifiedAt: undefined });
+    }
+    teams.set(t.id, t);
+    teamNameLowerIndex.set(t.teamName.toLowerCase().trim(), t.id);
+    redisCache.zadd('ctf:leaderboard:zset', t.score, t.id);
+  });
+  console.log(`[CTF Database] Loaded & synchronized ${persisted.length} registered student teams from persistent disk store`);
+  const initialStandings = getSortedLeaderboard();
+  leaderboardStore.syncLeaderboard(initialStandings);
+  console.log(`[CTF Database] Computed & persisted evaluated leaderboard (${initialStandings.length} teams) into SQLite leaderboard table`);
+}
+
 loadInitialQuestions();
-// Arena starts with clean state (no fake or pre-seeded teams)
+loadPersistedTeams();
 
 // --- Server-Authoritative Timer & Auto-Submit Engine ---
 setInterval(() => {
@@ -449,6 +659,7 @@ setInterval(() => {
       if (competitionState.remainingSeconds === 0) {
         competitionState.status = 'ended';
         competitionState.writeupMode = true; // Auto-transition to writeup mode!
+        competitionStateStore.saveState(competitionState);
         const alertEvent: ActivityFeedEvent = {
           id: 'act-' + crypto.randomUUID(),
           timestamp: Date.now(),
@@ -456,8 +667,7 @@ setInterval(() => {
           teamName: 'SYSTEM',
           message: 'COMPETITION TIME EXPIRED! All submissions locked. Official challenge writeups are now available.',
         };
-        activityFeed.unshift(alertEvent);
-        io.emit('activity_event', alertEvent);
+        recordUserActivity(alertEvent);
         io.emit('competition_ended');
       }
     }
@@ -503,18 +713,30 @@ function requireTeamAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+const lastAdminAuthFailureLog = new Map<string, number>();
+
 function requireAdminAuth(req: Request, res: Response, next: NextFunction) {
   const rawToken = req.headers['x-admin-token'] || req.headers.authorization?.replace('Bearer ', '');
   const ip = getClientIp(req);
 
   if (!rawToken || typeof rawToken !== 'string') {
-    logSecurityEvent('INVALID_AUTH', 'Unauthorized access attempt to /admin route', ip, undefined, 'high');
+    const now = Date.now();
+    const last = lastAdminAuthFailureLog.get(ip + ':missing') || 0;
+    if (now - last > 15000) {
+      lastAdminAuthFailureLog.set(ip + ':missing', now);
+      logSecurityEvent('INVALID_AUTH', 'Unauthorized access attempt to /admin route', ip, undefined, 'high');
+    }
     return res.status(403).json({ success: false, error: 'Forbidden: Administrator credentials required.' });
   }
 
   const result = verifySignedToken(rawToken);
   if (!result.valid || !result.payload || result.payload.role !== 'admin') {
-    logSecurityEvent('INVALID_AUTH', `Admin RBAC authorization failed: ${result.error || 'Role mismatch'}`, ip, undefined, 'high');
+    const now = Date.now();
+    const last = lastAdminAuthFailureLog.get(ip + ':invalid') || 0;
+    if (now - last > 15000) {
+      lastAdminAuthFailureLog.set(ip + ':invalid', now);
+      logSecurityEvent('INVALID_AUTH', `Admin RBAC authorization failed: ${result.error || 'Role mismatch'}`, ip, undefined, 'high');
+    }
     return res.status(403).json({ success: false, error: 'Forbidden: Master administrator privileges required.' });
   }
 
@@ -539,6 +761,14 @@ app.use('/api/auth', authRateLimiter);
 app.post('/api/auth/signup', (req: Request, res: Response) => {
   const ip = getClientIp(req);
 
+  // Rate Limiting Protection against spam squad registrations
+  const rateResult = checkRateLimitTier('TEAM_AUTH', ip);
+  if (!rateResult.allowed) {
+    res.setHeader('Retry-After', rateResult.resetSeconds);
+    logSecurityEvent('RATE_LIMIT', `Team registration throttled: ${ip}`, ip, undefined, 'medium');
+    return res.status(429).json({ success: false, error: rateResult.reason });
+  }
+
   // Input Validation with Zod (enforces min 8 chars with letter + number, 1-4 members)
   const validation = TeamSignupSchema.safeParse(req.body);
   if (!validation.success) {
@@ -548,27 +778,36 @@ app.post('/api/auth/signup', (req: Request, res: Response) => {
     });
   }
 
-  const { teamName, password, members } = validation.data;
+  const { teamName, email, password, members } = validation.data;
   const sanitizedTeamName = sanitizeInput(teamName);
+  const sanitizedEmail = sanitizeInput(email).toLowerCase().trim();
   const sanitizedMembers = members.map((m) => sanitizeInput(m));
+  const lowerName = sanitizedTeamName.toLowerCase();
 
-  // Check if team name is already taken
-  for (const t of teams.values()) {
-    if (t.teamName.toLowerCase() === sanitizedTeamName.toLowerCase()) {
-      return res.status(409).json({
-        success: false,
-        error: 'Team name is already registered. Please select a different name or log in.',
-      });
-    }
+  // O(1) Inverted Index Duplicate Check for Team Name
+  if (teamNameLowerIndex.has(lowerName)) {
+    return res.status(409).json({
+      success: false,
+      error: 'Team name is already registered. Please select a different name or log in.',
+    });
   }
 
-  // Salt & Hash Password with PBKDF2 (100,000 iterations)
+  // Anti-Cheat: Strictly block duplicate registrations by email to prevent multi-accounting
+  if (teamStore.hasEmail(sanitizedEmail)) {
+    return res.status(409).json({
+      success: false,
+      error: 'This email address is already registered to a competing squad. Duplicate registrations are prohibited to avoid cheating.',
+    });
+  }
+
+  // Salt & Hash Password with Argon2id-grade memory-hard scrypt
   const { salt, hash } = hashPassword(password);
   const id = 'team-' + crypto.randomUUID();
 
   const team: Team = {
     id,
     teamName: sanitizedTeamName,
+    email: sanitizedEmail,
     passwordHash: hash,
     passwordSalt: salt,
     members: sanitizedMembers,
@@ -585,17 +824,35 @@ app.post('/api/auth/signup', (req: Request, res: Response) => {
     isFlaggedAnomaly: false,
   };
   teams.set(id, team);
+  teamNameLowerIndex.set(lowerName, id);
+  teamStore.save(team);
+  redisCache.zadd('ctf:leaderboard:zset', 0, id);
 
   const joinEvent: ActivityFeedEvent = {
     id: 'act-' + crypto.randomUUID(),
     timestamp: Date.now(),
-    type: 'system',
+    type: 'user_signup',
     teamName: team.teamName,
-    message: `Team [${team.teamName}] registered (${team.members.length} members).`,
+    message: `Team [${team.teamName}] registered (${team.members.length} members: ${team.members.join(', ')}).`,
   };
-  activityFeed.unshift(joinEvent);
-  io.emit('activity_event', joinEvent);
+  recordUserActivity(joinEvent);
+  io.emit('admin:team_registered', team);
   broadcastLeaderboard();
+
+  // Audit Log: Precise timestamped registration
+  recordAuditLog(
+    'STUDENT',
+    team.teamName,
+    'REGISTRATION',
+    {
+      teamId: team.id,
+      teamName: team.teamName,
+      email: team.email,
+      members: team.members,
+      registeredAt: new Date().toISOString(),
+    },
+    ip
+  );
 
   // Cryptographically signed HMAC-SHA256 session token
   const token = createSignedToken('team', team.id);
@@ -612,9 +869,17 @@ app.post('/api/auth/signup', (req: Request, res: Response) => {
   });
 });
 
-// 2.) Dedicated Secure Team Login
+// 2.) Dedicated Secure Team Login & Stealth Unified Admin Gateway
 app.post('/api/auth/login', (req: Request, res: Response) => {
   const ip = getClientIp(req);
+
+  // Rate Limiting Protection against credential-stuffing and brute force
+  const rateResult = checkRateLimitTier('TEAM_AUTH', ip);
+  if (!rateResult.allowed) {
+    res.setHeader('Retry-After', rateResult.resetSeconds);
+    logSecurityEvent('BRUTE_FORCE_LOCKOUT', `Authentication rate limit exceeded for ${ip}`, ip, undefined, 'high');
+    return res.status(429).json({ success: false, error: rateResult.reason });
+  }
 
   const validation = TeamLoginSchema.safeParse(req.body);
   if (!validation.success) {
@@ -625,13 +890,97 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
   }
 
   const { teamName, password } = validation.data;
-  const cleanName = sanitizeInput(teamName).toLowerCase();
+  const cleanName = sanitizeInput(teamName).toLowerCase().trim();
 
-  let matchedTeam: Team | undefined;
-  for (const t of teams.values()) {
-    if (t.teamName.toLowerCase() === cleanName) {
-      matchedTeam = t;
-      break;
+  // --- Strict Stealth Admin Authentication Gate ---
+  // Authenticates ONLY the secret high-entropy ADMIN_USER_ID or explicitly registered management operators
+  const operators = getManagementOperators();
+  const isMatchAdminUserId = cleanName === ADMIN_USER_ID.toLowerCase().trim();
+  const matchedOperator = operators.find(
+    (op) =>
+      op.username.toLowerCase().trim() === cleanName ||
+      op.displayName.toLowerCase().trim() === cleanName
+  );
+
+  let isOperatorAuth = false;
+  let activeOperatorName = ADMIN_USERNAME;
+
+  if (isMatchAdminUserId) {
+    const givenBuffer = Buffer.from(password);
+    const targetBuffer = Buffer.from(ADMIN_PASSWORD);
+    if (
+      givenBuffer.length === targetBuffer.length &&
+      crypto.timingSafeEqual(givenBuffer, targetBuffer)
+    ) {
+      isOperatorAuth = true;
+      activeOperatorName = ADMIN_USERNAME;
+    }
+  } else if (matchedOperator) {
+    const givenBuffer = Buffer.from(password);
+    const targetBuffer = Buffer.from(matchedOperator.passkey);
+    if (
+      givenBuffer.length === targetBuffer.length &&
+      crypto.timingSafeEqual(givenBuffer, targetBuffer)
+    ) {
+      isOperatorAuth = true;
+      activeOperatorName = matchedOperator.displayName;
+    }
+  }
+
+  if (isOperatorAuth) {
+    logSecurityEvent(
+      'INVALID_AUTH',
+      `Administrator [${activeOperatorName}] authenticated via standard login portal`,
+      ip,
+      undefined,
+      'low'
+    );
+    recordAuditLog(
+      'ADMIN',
+      activeOperatorName,
+      'LOGIN',
+      {
+        operator: activeOperatorName,
+        method: 'stealth_login_portal',
+        role: 'admin',
+      },
+      ip
+    );
+    const token = createSignedToken(
+      'admin',
+      `admin-${cleanName.replace(/\s+/g, '-')}`,
+      43200000,
+      activeOperatorName
+    );
+    return res.json({
+      success: true,
+      isAdmin: true,
+      adminName: activeOperatorName,
+      token,
+      message: `Command authority confirmed for ${activeOperatorName}.`,
+    });
+  }
+
+  // O(1) Index Lookup by Team Name or Email
+  const matchedTeamId = teamNameLowerIndex.get(cleanName);
+  let matchedTeam: Team | undefined = matchedTeamId ? teams.get(matchedTeamId) : undefined;
+
+  // Secondary O(1) Email Lookup to allow login by email
+  if (!matchedTeam) {
+    matchedTeam = teamStore.getByEmail(cleanName);
+  }
+
+  // Fallback linear check if index wasn't populated
+  if (!matchedTeam) {
+    for (const t of teams.values()) {
+      if (
+        t.teamName.toLowerCase() === cleanName ||
+        (t.email && t.email.toLowerCase() === cleanName)
+      ) {
+        matchedTeam = t;
+        teamNameLowerIndex.set(cleanName, t.id);
+        break;
+      }
     }
   }
 
@@ -658,6 +1007,28 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
 
   // Cryptographically signed session token
   const token = createSignedToken('team', matchedTeam.id);
+
+  // Record user activity
+  recordUserActivity({
+    id: 'act-' + crypto.randomUUID(),
+    timestamp: Date.now(),
+    type: 'user_login',
+    teamName: matchedTeam.teamName,
+    message: `Team [${matchedTeam.teamName}] authenticated / logged in from ${ip}.`,
+  });
+
+  // Audit Log: Precise timestamped student login
+  recordAuditLog(
+    'STUDENT',
+    matchedTeam.teamName,
+    'LOGIN',
+    {
+      teamId: matchedTeam.id,
+      teamName: matchedTeam.teamName,
+      email: matchedTeam.email,
+    },
+    ip
+  );
 
   res.json({
     success: true,
@@ -732,16 +1103,28 @@ app.post('/api/auth/team', (req: Request, res: Response) => {
     };
     teams.set(id, team);
 
+    teamStore.save(team);
     const joinEvent: ActivityFeedEvent = {
       id: 'act-' + crypto.randomUUID(),
       timestamp: Date.now(),
-      type: 'system',
+      type: 'user_signup',
       teamName: team.teamName,
-      message: `Team [${team.teamName}] registered (${team.members.length} members).`,
+      message: `Team [${team.teamName}] registered (${team.members.length} members: ${team.members.join(', ')}).`,
     };
-    activityFeed.unshift(joinEvent);
-    io.emit('activity_event', joinEvent);
+    recordUserActivity(joinEvent);
     broadcastLeaderboard();
+    recordAuditLog(
+      'STUDENT',
+      team.teamName,
+      'REGISTRATION',
+      {
+        teamId: team.id,
+        teamName: team.teamName,
+        members: team.members,
+        endpoint: '/api/auth/team',
+      },
+      ip
+    );
   }
 
   // 3.) Issue cryptographic signed session token
@@ -757,6 +1140,35 @@ app.post('/api/auth/team', (req: Request, res: Response) => {
       score: team.score,
     },
   });
+});
+
+// Stealth Admin Secret Route Verification
+app.post('/api/auth/verify-admin-route', (req: Request, res: Response) => {
+  const ip = getClientIp(req);
+  const { route } = req.body || {};
+
+  if (typeof route !== 'string') {
+    return res.status(404).json({ valid: false, error: 'Not found' });
+  }
+
+  // Rate Limiting: Prevent route brute-forcing
+  const rateResult = checkRateLimitTier('ADMIN_LOGIN', ip);
+  if (!rateResult.allowed) {
+    return res.status(404).json({ valid: false, error: 'Not found' });
+  }
+
+  const givenBuffer = Buffer.from(route);
+  const targetBuffer = Buffer.from(ADMIN_ROUTE_SECRET);
+  const isMatch =
+    givenBuffer.length === targetBuffer.length &&
+    crypto.timingSafeEqual(givenBuffer, targetBuffer);
+
+  if (isMatch) {
+    return res.json({ valid: true });
+  }
+
+  // Stealth 404 to prevent enumeration
+  return res.status(404).json({ valid: false, error: 'Not found' });
 });
 
 // 1.) & 3.) Admin Master Authentication with Timing-Safe Comparison & Lockout
@@ -786,9 +1198,37 @@ app.post('/api/auth/admin', (req: Request, res: Response) => {
     givenBuffer.length === targetBuffer.length &&
     crypto.timingSafeEqual(givenBuffer, targetBuffer);
 
-  if (isMatch) {
-    const token = createSignedToken('admin', 'admin-master', 43200000); // 12 hours
-    res.json({ success: true, token });
+  const operators = getManagementOperators();
+  const matchedOperator = operators.find((op) => {
+    const opBuffer = Buffer.from(op.passkey);
+    return (
+      givenBuffer.length === opBuffer.length &&
+      crypto.timingSafeEqual(givenBuffer, opBuffer)
+    );
+  });
+
+  if (isMatch || matchedOperator) {
+    const activeName = matchedOperator ? matchedOperator.displayName : ADMIN_USERNAME;
+    const token = createSignedToken(
+      'admin',
+      `admin-${activeName.toLowerCase().replace(/\s+/g, '-')}`,
+      43200000,
+      activeName
+    );
+
+    recordAuditLog(
+      'ADMIN',
+      activeName,
+      'LOGIN',
+      {
+        operator: activeName,
+        method: 'master_passkey',
+        role: 'admin',
+      },
+      ip
+    );
+
+    res.json({ success: true, token, adminName: activeName });
   } else {
     logSecurityEvent('INVALID_AUTH', 'Failed master admin passkey entry', ip, undefined, 'high');
     res.status(401).json({ success: false, error: 'Invalid master passkey credentials.' });
@@ -799,11 +1239,20 @@ app.post('/api/auth/admin', (req: Request, res: Response) => {
 app.get('/api/state', async (req: Request, res: Response) => {
   const rawToken = req.headers.authorization?.replace('Bearer ', '');
   let team: Team | undefined;
+  let tokenExpired = false;
 
   if (rawToken) {
     const verified = verifySignedToken(rawToken);
     if (verified.valid && verified.payload && verified.payload.role === 'team') {
-      team = teams.get(verified.payload.subjectId);
+      team = teams.get(verified.payload.subjectId) || teamStore.getById(verified.payload.subjectId);
+      if (team && !teams.has(team.id)) {
+        teams.set(team.id, team);
+      }
+      if (!team) {
+        tokenExpired = true;
+      }
+    } else {
+      tokenExpired = true;
     }
   }
 
@@ -817,10 +1266,12 @@ app.get('/api/state', async (req: Request, res: Response) => {
 
   const responsePayload = {
     competitionState,
+    tokenExpired,
     team: team
       ? {
           id: team.id,
           teamName: team.teamName,
+          email: team.email,
           members: team.members,
           score: team.score,
           solves: team.solves,
@@ -830,6 +1281,8 @@ app.get('/api/state', async (req: Request, res: Response) => {
           strikes: team.strikes || 0,
           isDisqualified: Boolean(team.isDisqualified),
           disqualifiedReason: team.disqualifiedReason,
+          hasStarted: Boolean(team.hasStarted),
+          startedAt: team.startedAt,
         }
       : null,
     challenges: getPublicChallengesForTeam(team),
@@ -846,8 +1299,8 @@ app.get('/api/state', async (req: Request, res: Response) => {
   res.json(responsePayload);
 });
 
-// Toggle Demo Teams vs Clean Slate
-app.post('/api/scoreboard/mode', (req: Request, res: Response) => {
+// Toggle Demo Teams vs Clean Slate (Admin Authorization Strictly Required)
+app.post('/api/scoreboard/mode', requireAdminAuth, (req: Request, res: Response) => {
   const { mode } = req.body;
   if (mode === 'clean') {
     clearDemoTeams();
@@ -904,7 +1357,7 @@ app.post('/api/submit-flag', requireTeamAuth, flagSubmissionRateLimiter, (req: R
     return res.status(403).json({ success: false, error: `Competition is ${competitionState.status}. Submissions locked.` });
   }
 
-  const chal = challenges.find((c) => c.id === challengeId);
+  const chal = challengeMap.get(challengeId) || challenges.find((c) => c.id === challengeId);
   if (!chal || !chal.isEnabled) {
     return res.status(404).json({ success: false, error: 'Challenge not found or disabled.' });
   }
@@ -919,7 +1372,10 @@ app.post('/api/submit-flag', requireTeamAuth, flagSubmissionRateLimiter, (req: R
   }
 
   const submittedFlag = flag.trim();
-  const isCorrect = submittedFlag === chal.flag.trim();
+  const targetFlag = chal.flag.trim();
+  const submittedHash = crypto.createHash('sha256').update(submittedFlag).digest();
+  const targetHash = crypto.createHash('sha256').update(targetFlag).digest();
+  const isCorrect = crypto.timingSafeEqual(submittedHash, targetHash);
 
   // Behavioral Velocity Anomaly Check (< 4 seconds between distinct challenge solves)
   const timeSinceLastSolve = Date.now() - team.lastSolveTime;
@@ -941,6 +1397,12 @@ app.post('/api/submit-flag', requireTeamAuth, flagSubmissionRateLimiter, (req: R
       chal.firstBloodTeam = team.teamName;
     }
     chal.solvesCount++;
+
+    // Persist challenge solve count & first blood to SQLite
+    challengeStore.update(chal.id, {
+      solvesCount: chal.solvesCount,
+      firstBloodTeam: chal.firstBloodTeam,
+    });
 
     // Calculate deducted hints
     const hintsUnlocked = team.hintsUnlocked[challengeId] || [];
@@ -964,6 +1426,29 @@ app.post('/api/submit-flag', requireTeamAuth, flagSubmissionRateLimiter, (req: R
       isFirstBlood,
     };
 
+    // Synchronize to Redis ZSET and Persistent DB
+    redisCache.zadd('ctf:leaderboard:zset', team.score, team.id).catch(() => {});
+    teamStore.update(team.id, {
+      score: team.score,
+      lastSolveTime: team.lastSolveTime,
+      solves: team.solves,
+    });
+    io.emit('admin:team_updated', team);
+
+    // Persist to SQLite Submission Audit Log
+    submissionStore.record({
+      id: 'sub-' + crypto.randomUUID(),
+      teamId: team.id,
+      teamName: team.teamName,
+      challengeId: chal.id,
+      challengeTitle: chal.title,
+      submittedFlag,
+      isCorrect: true,
+      pointsAwarded: finalPoints,
+      timestamp: now,
+      ip,
+    });
+
     const eventType = isFirstBlood ? 'first_blood' : 'solve';
     const message = isFirstBlood
       ? `Claimed [FIRST BLOOD] on ${chal.title} (+${finalPoints} pts)!`
@@ -979,12 +1464,25 @@ app.post('/api/submit-flag', requireTeamAuth, flagSubmissionRateLimiter, (req: R
       message,
     };
 
-    activityFeed.unshift(feedEvent);
-    if (activityFeed.length > 50) activityFeed.pop();
-
-    io.emit('activity_event', feedEvent);
+    recordUserActivity(feedEvent);
     broadcastLeaderboard();
     broadcastState();
+
+    // Audit Log: Timestamped Flag Solved
+    recordAuditLog(
+      'STUDENT',
+      team.teamName,
+      'FLAG_SUBMISSION',
+      {
+        challengeId: chal.id,
+        challengeTitle: chal.title,
+        isCorrect: true,
+        pointsAwarded: finalPoints,
+        isFirstBlood,
+        totalTeamScore: team.score,
+      },
+      ip
+    );
 
     return res.json({
       success: true,
@@ -999,8 +1497,55 @@ app.post('/api/submit-flag', requireTeamAuth, flagSubmissionRateLimiter, (req: R
     const newCount = (team.failedAttempts[challengeId] || 0) + 1;
     team.failedAttempts[challengeId] = newCount;
     team.totalFailedAttempts++;
+    teamStore.update(team.id, {
+      failedAttempts: team.failedAttempts,
+      totalFailedAttempts: team.totalFailedAttempts,
+    });
+    io.emit('admin:team_updated', team);
+
+    // Persist Failed Submission to SQLite Audit Log
+    submissionStore.record({
+      id: 'sub-' + crypto.randomUUID(),
+      teamId: team.id,
+      teamName: team.teamName,
+      challengeId: chal.id,
+      challengeTitle: chal.title,
+      submittedFlag,
+      isCorrect: false,
+      pointsAwarded: 0,
+      timestamp: Date.now(),
+      ip,
+    });
 
     const remaining = Math.max(0, chal.maxAttempts - newCount);
+
+    // Record user activity for failed submission attempt
+    recordUserActivity({
+      id: 'act-' + crypto.randomUUID(),
+      timestamp: Date.now(),
+      type: 'failed_submission',
+      teamName: team.teamName,
+      challengeTitle: chal.title,
+      points: 0,
+      message: `Submitted incorrect flag "${submittedFlag.slice(0, 30)}" for ${chal.title} (${remaining}/${chal.maxAttempts} attempts left).`,
+    });
+
+    // Audit Log: Timestamped Failed Flag Submission
+    recordAuditLog(
+      'STUDENT',
+      team.teamName,
+      'FLAG_SUBMISSION',
+      {
+        challengeId: chal.id,
+        challengeTitle: chal.title,
+        isCorrect: false,
+        pointsAwarded: 0,
+        attemptsRemaining: remaining,
+        submittedFlagSnippet: submittedFlag.slice(0, 24),
+      },
+      ip
+    );
+
     broadcastLeaderboard();
 
     return res.status(400).json({
@@ -1015,6 +1560,7 @@ app.post('/api/submit-flag', requireTeamAuth, flagSubmissionRateLimiter, (req: R
 // 2.) Unlock Hint Marketplace with Zod
 app.post('/api/unlock-hint', requireTeamAuth, (req: Request, res: Response) => {
   const team: Team = (req as any).team;
+  const ip = getClientIp(req);
 
   const validation = HintUnlockSchema.safeParse(req.body);
   if (!validation.success) {
@@ -1046,6 +1592,8 @@ app.post('/api/unlock-hint', requireTeamAuth, (req: Request, res: Response) => {
   }
 
   team.hintsUnlocked[challengeId].push(hintId);
+  teamStore.update(team.id, { hintsUnlocked: team.hintsUnlocked });
+  io.emit('admin:team_updated', team);
 
   const event: ActivityFeedEvent = {
     id: 'act-' + crypto.randomUUID(),
@@ -1056,8 +1604,21 @@ app.post('/api/unlock-hint', requireTeamAuth, (req: Request, res: Response) => {
     points: -hint.cost,
     message: `Unlocked Hint for ${chal.title} (-${hint.cost} reward penalty).`,
   };
-  activityFeed.unshift(event);
-  io.emit('activity_event', event);
+  recordUserActivity(event);
+
+  // Audit Log: Timestamped Hint Unlock
+  recordAuditLog(
+    'STUDENT',
+    team.teamName,
+    'HINT_UNLOCK',
+    {
+      challengeId: chal.id,
+      challengeTitle: chal.title,
+      hintId: hint.id,
+      cost: hint.cost,
+    },
+    ip
+  );
 
   res.json({
     success: true,
@@ -1067,7 +1628,7 @@ app.post('/api/unlock-hint', requireTeamAuth, (req: Request, res: Response) => {
   });
 });
 
-// 5.) Download Challenge Attachment with Secure Headers & Path Traversal Guards
+// 5.) Challenge Artifact In-Browser Display & Download Engine
 app.get('/api/challenges/:id/attachment', (req: Request, res: Response) => {
   const chal = challenges.find((c) => c.id === req.params.id);
   if (!chal || !chal.attachment) {
@@ -1090,80 +1651,326 @@ app.get('/api/challenges/:id/attachment', (req: Request, res: Response) => {
     return res.status(400).json({ success: false, error: validation.error });
   }
 
-  // Set protective Content-Security-Policy & anti-sniff headers
-  const headers = getSafeAttachmentHeaders(validation.sanitizedFilename, chal.attachment.mimeType);
-  for (const [key, val] of Object.entries(headers)) {
-    res.setHeader(key, val);
+  const isInline = req.query.view === 'inline' || req.query.inline === 'true';
+
+  // Audit team activity
+  const authHeader = (req.headers.authorization || '').replace('Bearer ', '') || (req.query.token as string);
+  let team: Team | undefined;
+  if (authHeader) {
+    const verified = verifySignedToken(authHeader);
+    if (verified.valid && verified.payload && verified.payload.role === 'team') {
+      team = teams.get(verified.payload.subjectId);
+    }
+  }
+  if (!team) {
+    const ip = getClientIp(req);
+    team = Array.from(teams.values()).find((t) => t.ip === ip);
+  }
+  if (team) {
+    recordUserActivity({
+      id: 'act-' + crypto.randomUUID(),
+      timestamp: Date.now(),
+      type: 'artifact_view',
+      teamName: team.teamName,
+      challengeTitle: chal.title,
+      message: `${isInline ? 'Inspected artifact' : 'Downloaded file'} "${chal.attachment.fileName}" for challenge "${chal.title}".`,
+    });
+    recordAuditLog(
+      'STUDENT',
+      team.teamName,
+      'ARTIFACT_INSPECTED',
+      {
+        challengeId: chal.id,
+        challengeTitle: chal.title,
+        fileName: chal.attachment.fileName,
+        isInline: Boolean(isInline),
+      },
+      getClientIp(req)
+    );
+  }
+
+  if (isInline) {
+    // In-browser rendering headers: Allows same-domain inline viewing & iframe inspection with script sandbox
+    res.setHeader('Content-Disposition', `inline; filename="${validation.sanitizedFilename}"`);
+    res.setHeader('Content-Type', chal.attachment.mimeType || 'text/plain; charset=utf-8');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+  } else {
+    // Standard secure download headers
+    const headers = getSafeAttachmentHeaders(validation.sanitizedFilename, chal.attachment.mimeType);
+    for (const [key, val] of Object.entries(headers)) {
+      res.setHeader(key, val);
+    }
   }
 
   res.send(chal.attachment.content);
 });
 
-// 5-Strike Infraction Telemetry & Elimination Engine
-app.post('/api/telemetry/strike', requireTeamAuth, async (req: Request, res: Response) => {
-  const team: Team = (req as any).team;
-  const ip = getClientIp(req);
-  const { reason, key } = req.body;
-
-  if (team.isDisqualified) {
-    return res.json({
-      success: true,
-      strikes: 5,
-      isDisqualified: true,
-      reason: team.disqualifiedReason || 'Already disqualified',
-    });
+// Challenge Artifact Telemetry & Metadata API for In-App Viewer
+app.get('/api/challenges/:id/artifact/data', (req: Request, res: Response) => {
+  const chal = challenges.find((c) => c.id === req.params.id);
+  if (!chal || !chal.attachment) {
+    return res.status(404).json({ success: false, error: 'Artifact not found' });
   }
 
-  team.strikes = (team.strikes || 0) + 1;
-  const infractionReason = sanitizeInput(reason || 'Security infraction detected');
-
-  logSecurityEvent(
-    'SECURITY_STRIKE',
-    `Strike ${team.strikes}/5 issued: ${infractionReason}${key ? ` [Key: ${sanitizeInput(key)}]` : ''}`,
-    ip,
-    team.teamName,
-    team.strikes >= 4 ? 'high' : 'medium'
-  );
-
-  if (team.strikes >= 5) {
-    team.isDisqualified = true;
-    team.disqualifiedAt = Date.now();
-    team.disqualifiedReason = infractionReason;
-
-    logSecurityEvent(
-      'TEAM_DISQUALIFIED',
-      `Team [${team.teamName}] permanently DISQUALIFIED (5 strikes accumulated). Session revoked.`,
-      ip,
-      team.teamName,
-      'high'
-    );
-
-    const alertEvent: ActivityFeedEvent = {
+  // Audit team activity
+  const authHeader = (req.headers.authorization || '').replace('Bearer ', '') || (req.query.token as string);
+  let team: Team | undefined;
+  if (authHeader) {
+    const verified = verifySignedToken(authHeader);
+    if (verified.valid && verified.payload && verified.payload.role === 'team') {
+      team = teams.get(verified.payload.subjectId);
+    }
+  }
+  if (!team) {
+    const ip = getClientIp(req);
+    team = Array.from(teams.values()).find((t) => t.ip === ip);
+  }
+  if (team) {
+    recordUserActivity({
       id: 'act-' + crypto.randomUUID(),
       timestamp: Date.now(),
-      type: 'system',
+      type: 'artifact_view',
       teamName: team.teamName,
-      message: `Team [${team.teamName}] was DISQUALIFIED (5 strikes accumulated).`,
-    };
-    activityFeed.unshift(alertEvent);
-
-    io.emit('team_disqualified', {
-      teamId: team.id,
-      teamName: team.teamName,
-      reason: infractionReason,
+      challengeTitle: chal.title,
+      message: `Inspected artifact file "${chal.attachment.fileName}" for challenge "${chal.title}".`,
     });
-    io.emit('activity_event', alertEvent);
+    recordAuditLog(
+      'STUDENT',
+      team.teamName,
+      'ARTIFACT_INSPECTED',
+      {
+        challengeId: chal.id,
+        challengeTitle: chal.title,
+        fileName: chal.attachment.fileName,
+        viewType: 'in_app_viewer',
+      },
+      getClientIp(req)
+    );
   }
 
-  await redisCache.invalidate('cache:');
-  broadcastLeaderboard();
-  broadcastState();
+  const { fileName, mimeType, size, content } = chal.attachment;
+  const ext = path.extname(fileName).toLowerCase();
+  const isImage = /^\.(png|jpe?g|gif|webp|svg|bmp)$/i.test(ext) || mimeType.startsWith('image/');
+  const isPdf = ext === '.pdf' || mimeType === 'application/pdf';
+  const isCsv = ext === '.csv' || ext === '.tsv';
+  const isText = isCsv || /^\.(txt|log|py|c|cpp|sh|json|md|env|yml|yaml|asm|hex)$/i.test(ext) || mimeType.startsWith('text/');
 
   res.json({
     success: true,
-    strikes: team.strikes,
+    id: chal.id,
+    challengeTitle: chal.title,
+    fileName,
+    mimeType,
+    size,
+    ext,
+    isImage,
+    isPdf,
+    isText,
+    isCsv,
+    rawContent: content,
+    viewUrl: `/api/challenges/${chal.id}/attachment?view=inline`,
+    downloadUrl: `/api/challenges/${chal.id}/attachment`,
+  });
+});
+
+// Telemetry & Security Infraction Engine
+// Tab switching and window focus changes are 100% permitted per competition rules.
+// Only screen capture attempts (PrintScreen / Snipping Tool) trigger screenshot warnings.
+app.post('/api/telemetry/strike', requireTeamAuth, async (req: Request, res: Response) => {
+  const team: Team = (req as any).team;
+  return res.json({
+    success: true,
+    strikes: team.strikes || 0,
     isDisqualified: Boolean(team.isDisqualified),
-    reason: infractionReason,
+    message: 'Tab switching and inspection shortcuts are permitted without penalty. Only screenshot capture is monitored.',
+  });
+});
+
+// --- Screenshot Attempt Detection & Admin Real-Time Alert ---
+const screenshotAlerts: ScreenshotAlert[] = screenshotStore.getAll(100);
+
+app.post('/api/telemetry/screenshot', async (req: Request, res: Response) => {
+  const ip = getClientIp(req);
+  const { key, details, teamId: bodyTeamId, teamName: bodyTeamName } = req.body;
+
+  // 0. Strict Admin & Official Exemption: Administrators must NEVER be penalized or recorded
+  const adminHeader = req.headers['x-admin-token'] || (typeof req.headers.authorization === 'string' && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.slice(7) : undefined);
+  if (adminHeader && typeof adminHeader === 'string') {
+    const adminVerify = verifySignedToken(adminHeader);
+    if (adminVerify.valid && adminVerify.payload?.role === 'admin') {
+      return res.json({
+        success: true,
+        message: 'Admin / Official action exempt from proctoring telemetry.',
+      });
+    }
+  }
+
+  let team: Team | undefined;
+
+  // 1. Try Bearer token
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (token) {
+    const verified = verifySignedToken(token);
+    if (verified.valid) {
+      if (verified.payload?.role === 'admin') {
+        return res.json({
+          success: true,
+          message: 'Admin / Official action exempt from proctoring telemetry.',
+        });
+      }
+      if (verified.payload?.subjectId) {
+        team = teams.get(verified.payload.subjectId);
+      }
+    }
+  }
+
+  // 2. Prevent Frame/Spoofing Attacks:
+  // Strikes can ONLY be attributed to a squad if authenticated via cryptographically signed token.
+  // Unauthenticated requests or body-only teamIds are NEVER trusted to increment strikes on a competing squad.
+  if (!team) {
+    return res.json({
+      success: true,
+      message: 'Unauthenticated capture event logged without squad strike penalty.',
+    });
+  }
+
+  const resolvedTeamId = team.id;
+  const resolvedTeamName = team.teamName;
+  const resolvedEmail = team.email || req.body.email || undefined;
+  const resolvedMembers = team.members || [];
+
+  const triggerKey = sanitizeInput(key || 'PrintScreen');
+  const alertDetails = sanitizeInput(details || 'Screenshot capture shortcut / PrintScreen triggered');
+
+  const alert: ScreenshotAlert = {
+    id: 'ss-' + crypto.randomUUID(),
+    teamId: resolvedTeamId,
+    teamName: resolvedTeamName,
+    email: resolvedEmail,
+    members: resolvedMembers,
+    ip,
+    timestamp: Date.now(),
+    triggerKey,
+    details: alertDetails,
+  };
+
+  screenshotAlerts.unshift(alert);
+  if (screenshotAlerts.length > 100) screenshotAlerts.pop();
+  screenshotStore.add(alert); // Persist to SQLite
+
+  // Record activity in live audit feed
+  recordUserActivity({
+    id: 'act-' + crypto.randomUUID(),
+    timestamp: Date.now(),
+    type: 'system',
+    teamName: resolvedTeamName,
+    message: `📸 Screen capture shortcut triggered (${triggerKey}) by [${resolvedTeamName}].`,
+  });
+
+  // Increment team strikes for screenshot violation (never disqualifies)
+  team.strikes = (team.strikes || 0) + 1;
+  teamStore.update(team.id, { strikes: team.strikes, isDisqualified: false });
+  io.emit('admin:team_updated', team);
+
+  // Instantly broadcast to admin side panel via WebSockets
+  io.emit('admin:screenshot_alert', alert);
+
+  // Security Incident Audit Log
+  logSecurityEvent(
+    'SCREENSHOT_ATTEMPT',
+    `📸 SCREENSHOT CAPTURE DETECTED: Team [${resolvedTeamName}] triggered screen capture (${triggerKey}) from ${ip} (Strike #${team?.strikes || 1})`,
+    ip,
+    resolvedTeamName,
+    'high'
+  );
+
+  // Audit Log: Precise Timestamped Screenshot Interception
+  recordAuditLog(
+    'STUDENT',
+    resolvedTeamName,
+    'SCREENSHOT_INTERCEPTED',
+    {
+      triggerKey,
+      details: alertDetails,
+      strikeCount: team?.strikes || 1,
+      teamId: resolvedTeamId,
+    },
+    ip
+  );
+
+  res.json({ success: true, recorded: true, strikes: team?.strikes || 1 });
+});
+
+// Admin endpoints for screenshot alerts feed
+app.get('/api/admin/screenshots', requireAdminAuth, (_req: Request, res: Response) => {
+  res.json(screenshotAlerts);
+});
+
+app.delete('/api/admin/screenshots/:id', requireAdminAuth, (req: Request, res: Response) => {
+  const idx = screenshotAlerts.findIndex((a) => a.id === req.params.id);
+  if (idx !== -1) {
+    screenshotAlerts.splice(idx, 1);
+  }
+  screenshotStore.delete(req.params.id);
+  res.json({ success: true });
+});
+
+app.delete('/api/admin/screenshots', requireAdminAuth, (_req: Request, res: Response) => {
+  screenshotAlerts.length = 0;
+  screenshotStore.clearAll();
+  res.json({ success: true });
+});
+
+// Explicit Opt-In: Team Readiness Gate
+app.post('/api/team/ready', requireTeamAuth, async (req: Request, res: Response) => {
+  const team: Team = (req as any).team;
+  const ip = getClientIp(req);
+
+  team.hasStarted = true;
+  team.startedAt = Date.now();
+  teamStore.update(team.id, {
+    hasStarted: true,
+    startedAt: team.startedAt,
+  });
+  io.emit('admin:team_updated', team);
+
+  logSecurityEvent(
+    'COMPETITION_STARTED',
+    `Team [${team.teamName}] confirmed [ READY TO START ]. Security telemetry engaged.`,
+    ip,
+    team.teamName,
+    'low'
+  );
+
+  recordUserActivity({
+    id: 'act-' + crypto.randomUUID(),
+    timestamp: Date.now(),
+    type: 'ready_started',
+    teamName: team.teamName,
+    message: `Team [${team.teamName}] confirmed READY TO START and launched their arena timer.`,
+  });
+
+  // Audit Log: Precise Timestamped READY_TO_START
+  recordAuditLog(
+    'STUDENT',
+    team.teamName,
+    'READY_TO_START',
+    {
+      teamId: team.id,
+      teamName: team.teamName,
+      startedAt: new Date(team.startedAt).toISOString(),
+    },
+    ip
+  );
+
+  res.json({
+    success: true,
+    hasStarted: true,
+    startedAt: team.startedAt,
+    message: 'Defense telemetry and competition timer initiated.',
   });
 });
 
@@ -1181,21 +1988,252 @@ app.post('/api/telemetry/devtools-alert', (req: Request, res: Response) => {
   res.json({ logged: true });
 });
 
+// ======================== USER FEEDBACK ENDPOINTS ========================
+
+// Submit feedback (7 questions)
+app.post('/api/feedback', async (req: Request, res: Response) => {
+  const ip = getClientIp(req);
+
+  // Rate Limiting: Prevent feedback spam floods
+  const rateResult = checkRateLimitTier('TEAM_AUTH', ip);
+  if (!rateResult.allowed) {
+    res.setHeader('Retry-After', rateResult.resetSeconds);
+    return res.status(429).json({ success: false, error: 'Feedback rate limit reached. Please wait a moment.' });
+  }
+
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  let resolvedTeamId = 'anonymous';
+  let resolvedTeamName = 'Participant';
+
+  if (token) {
+    const verified = verifySignedToken(token);
+    if (verified.valid && verified.payload && verified.payload.role === 'team') {
+      const t = teams.get(verified.payload.subjectId) || teamStore.getById(verified.payload.subjectId);
+      if (t) {
+        resolvedTeamId = t.id;
+        resolvedTeamName = t.teamName;
+      }
+    }
+  }
+
+  // Allow custom teamName from body if provided
+  if (req.body?.teamName && typeof req.body.teamName === 'string' && req.body.teamName.trim()) {
+    resolvedTeamName = sanitizeInput(req.body.teamName.trim());
+    if (resolvedTeamId === 'anonymous') {
+      const matchId = teamNameLowerIndex.get(resolvedTeamName.toLowerCase());
+      if (matchId) resolvedTeamId = matchId;
+    }
+  }
+
+  const {
+    ratingUi,
+    challengeDifficulty,
+    platformStability,
+    fairPlaySecurity,
+    clarityRulesHints,
+    favoriteHighlight,
+    suggestionsRound3,
+  } = req.body || {};
+
+  const numRatingUi = Math.min(5, Math.max(1, parseInt(ratingUi, 10) || 5));
+  const cleanDifficulty = sanitizeInput(challengeDifficulty || 'balanced');
+  const numStability = Math.min(5, Math.max(1, parseInt(platformStability, 10) || 5));
+  const cleanSecurity = sanitizeInput(fairPlaySecurity || 'seamless');
+  const numClarity = Math.min(5, Math.max(1, parseInt(clarityRulesHints, 10) || 5));
+  const cleanFavorite = sanitizeInput(favoriteHighlight || '').slice(0, 500);
+  const cleanSuggestions = sanitizeInput(suggestionsRound3 || '').slice(0, 2000);
+
+  const feedbackId = 'fb-' + crypto.randomUUID();
+  const feedbackRecord: FeedbackSubmission = {
+    id: feedbackId,
+    teamId: resolvedTeamId,
+    teamName: resolvedTeamName,
+    ratingUi: numRatingUi,
+    challengeDifficulty: cleanDifficulty,
+    platformStability: numStability,
+    fairPlaySecurity: cleanSecurity,
+    clarityRulesHints: numClarity,
+    favoriteHighlight: cleanFavorite,
+    suggestionsRound3: cleanSuggestions,
+    submittedAt: Date.now(),
+  };
+
+  feedbackStore.save(feedbackRecord);
+
+  // Broadcast to admin dashboard
+  io.emit('admin:feedback_received', feedbackRecord);
+
+  recordAuditLog(
+    'STUDENT',
+    resolvedTeamName,
+    'FEEDBACK_SUBMITTED',
+    {
+      teamId: resolvedTeamId,
+      teamName: resolvedTeamName,
+      ratingUi: numRatingUi,
+      challengeDifficulty: cleanDifficulty,
+      platformStability: numStability,
+    },
+    ip
+  );
+
+  res.json({
+    success: true,
+    message: `Thanks Team ${resolvedTeamName} for your valuable feedback!`,
+    feedback: feedbackRecord,
+  });
+});
+
+// Get team's existing feedback if any
+app.get('/api/feedback/my', (req: Request, res: Response) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!token) return res.json({ feedback: null });
+
+  const verified = verifySignedToken(token);
+  if (!verified.valid || !verified.payload || verified.payload.role !== 'team') {
+    return res.json({ feedback: null });
+  }
+
+  const existing = feedbackStore.getByTeamId(verified.payload.subjectId);
+  res.json({ feedback: existing });
+});
+
+// Admin list all feedback
+app.get('/api/admin/feedbacks', requireAdminAuth, (_req: Request, res: Response) => {
+  const all = feedbackStore.getAll();
+  res.json({ feedbacks: all });
+});
+
 // ======================== ADMIN ENDPOINTS ========================
 
-// Timer Controls
+// Timer Controls - Full Admin Authority (Start, Stop/Pause, Restart, Set, Adjust)
 app.post('/api/admin/timer', requireAdminAuth, (req: Request, res: Response) => {
   const { action, seconds } = req.body;
+  const ip = getClientIp(req);
 
-  if (action === 'start') {
+  if (action === 'start' || action === 'resume') {
     competitionState.status = 'running';
-  } else if (action === 'pause') {
+    if (competitionState.remainingSeconds <= 0) {
+      competitionState.remainingSeconds = typeof seconds === 'number' && seconds > 0 ? Math.floor(seconds) : (competitionState.durationSeconds || 7200);
+    }
+    competitionState.writeupMode = false;
+
+    const event: ActivityFeedEvent = {
+      id: 'act-' + crypto.randomUUID(),
+      timestamp: Date.now(),
+      type: 'announcement',
+      teamName: 'ADMIN',
+      message: 'Competition countdown started / resumed by Admin. Submissions are active.',
+    };
+    recordUserActivity(event);
+
+    recordAuditLog(
+      'ADMIN',
+      'ADMIN_CONSOLE',
+      action === 'start' ? 'ADMIN_TIMER_START' : 'ADMIN_TIMER_RESUME',
+      {
+        action,
+        remainingSeconds: competitionState.remainingSeconds,
+        durationSeconds: competitionState.durationSeconds,
+      },
+      ip
+    );
+  } else if (action === 'pause' || action === 'stop') {
     competitionState.status = 'paused';
+
+    const event: ActivityFeedEvent = {
+      id: 'act-' + crypto.randomUUID(),
+      timestamp: Date.now(),
+      type: 'announcement',
+      teamName: 'ADMIN',
+      message: 'Competition countdown stopped by Admin. Submissions are temporarily held.',
+    };
+    recordUserActivity(event);
+
+    recordAuditLog(
+      'ADMIN',
+      'ADMIN_CONSOLE',
+      'ADMIN_TIMER_PAUSE',
+      {
+        action,
+        remainingSeconds: competitionState.remainingSeconds,
+      },
+      ip
+    );
+  } else if (action === 'restart') {
+    const restartSec = typeof seconds === 'number' && seconds > 0 ? Math.floor(seconds) : (competitionState.durationSeconds || 7200);
+    competitionState.status = 'running';
+    competitionState.remainingSeconds = restartSec;
+    competitionState.durationSeconds = restartSec;
+    competitionState.writeupMode = false;
+
+    const event: ActivityFeedEvent = {
+      id: 'act-' + crypto.randomUUID(),
+      timestamp: Date.now(),
+      type: 'announcement',
+      teamName: 'ADMIN',
+      message: `Competition countdown timer restarted by Admin (${Math.round(restartSec / 60)} minutes remaining). Submissions are open.`,
+    };
+    recordUserActivity(event);
+
+    recordAuditLog(
+      'ADMIN',
+      'ADMIN_CONSOLE',
+      'ADMIN_TIMER_RESTART',
+      {
+        action: 'restart',
+        restartSeconds: restartSec,
+        remainingSeconds: competitionState.remainingSeconds,
+      },
+      ip
+    );
   } else if (action === 'set' && typeof seconds === 'number') {
-    competitionState.remainingSeconds = Math.max(0, seconds);
+    competitionState.remainingSeconds = Math.max(0, Math.floor(seconds));
+    if (competitionState.remainingSeconds > 0 && competitionState.status === 'ended') {
+      competitionState.status = 'paused';
+    }
+
+    recordAuditLog(
+      'ADMIN',
+      'ADMIN_CONSOLE',
+      'ADMIN_TIMER_SET',
+      {
+        action: 'set',
+        seconds,
+        remainingSeconds: competitionState.remainingSeconds,
+      },
+      ip
+    );
   } else if (action === 'add' && typeof seconds === 'number') {
-    competitionState.remainingSeconds += seconds;
+    competitionState.remainingSeconds = Math.max(0, competitionState.remainingSeconds + Math.floor(seconds));
+    recordAuditLog(
+      'ADMIN',
+      'ADMIN_CONSOLE',
+      'ADMIN_TIMER_SET',
+      {
+        action: 'add',
+        seconds,
+        remainingSeconds: competitionState.remainingSeconds,
+      },
+      ip
+    );
+  } else if (action === 'subtract' && typeof seconds === 'number') {
+    competitionState.remainingSeconds = Math.max(0, competitionState.remainingSeconds - Math.floor(seconds));
+    recordAuditLog(
+      'ADMIN',
+      'ADMIN_CONSOLE',
+      'ADMIN_TIMER_SET',
+      {
+        action: 'subtract',
+        seconds,
+        remainingSeconds: competitionState.remainingSeconds,
+      },
+      ip
+    );
   }
+
+  // Persist updated timer state to SQLite
+  competitionStateStore.saveState(competitionState);
 
   io.emit('timer_tick', {
     status: competitionState.status,
@@ -1203,6 +2241,8 @@ app.post('/api/admin/timer', requireAdminAuth, (req: Request, res: Response) => 
     writeupMode: competitionState.writeupMode,
     serverTime: Date.now(),
   });
+
+  broadcastState();
 
   res.json({ success: true, state: competitionState });
 });
@@ -1223,6 +2263,7 @@ app.post('/api/admin/announcement', requireAdminAuth, (req: Request, res: Respon
   };
 
   competitionState.announcement = announcement;
+  competitionStateStore.saveState(competitionState); // Persist to SQLite
 
   const event: ActivityFeedEvent = {
     id: 'act-' + crypto.randomUUID(),
@@ -1231,10 +2272,20 @@ app.post('/api/admin/announcement', requireAdminAuth, (req: Request, res: Respon
     teamName: 'ADMIN HQ',
     message: `[HQ ANNOUNCEMENT] ${announcement.title}: ${announcement.message}`,
   };
-  activityFeed.unshift(event);
-
+  recordUserActivity(event);
   io.emit('announcement_broadcast', announcement);
-  io.emit('activity_event', event);
+
+  recordAuditLog(
+    'ADMIN',
+    'ADMIN_CONSOLE',
+    'BROADCAST_SENT',
+    {
+      announcementId: announcement.id,
+      title: announcement.title,
+      message: announcement.message,
+    },
+    getClientIp(req)
+  );
 
   res.json({ success: true, announcement });
 });
@@ -1242,40 +2293,127 @@ app.post('/api/admin/announcement', requireAdminAuth, (req: Request, res: Respon
 // Clear Announcement
 app.delete('/api/admin/announcement', requireAdminAuth, (req: Request, res: Response) => {
   competitionState.announcement = null;
+  competitionStateStore.saveState(competitionState); // Persist to SQLite
   io.emit('announcement_cleared');
   res.json({ success: true });
+});
+
+// Admin Adjust Global Matrix Rain Speed
+app.post('/api/admin/matrix-speed', requireAdminAuth, (req: Request, res: Response) => {
+  const rawSpeed = parseFloat(req.body.speed);
+  const speed = !isNaN(rawSpeed) ? Math.max(0.2, Math.min(4.0, rawSpeed)) : 1.0;
+
+  competitionState.matrixRainSpeed = speed;
+  competitionStateStore.saveState(competitionState);
+
+  io.emit('matrix_speed_updated', { speed });
+  broadcastState();
+
+  recordAuditLog(
+    'ADMIN',
+    'ADMIN_CONSOLE',
+    'SYSTEM_INFO',
+    {
+      action: 'matrix_rain_speed_adjusted',
+      speed,
+    },
+    getClientIp(req)
+  );
+
+  res.json({ success: true, speed, state: competitionState });
 });
 
 // Writeup Mode Toggle
 app.post('/api/admin/writeup-mode', requireAdminAuth, (req: Request, res: Response) => {
   const { enabled } = req.body;
   competitionState.writeupMode = Boolean(enabled);
+  competitionStateStore.saveState(competitionState); // Persist to SQLite
   broadcastState();
   res.json({ success: true, writeupMode: competitionState.writeupMode });
 });
 
-// Competition Reset Option
-app.post('/api/admin/reset', requireAdminAuth, (req: Request, res: Response) => {
-  teams.clear();
-  activityFeed = [];
-  securityLogs = [];
+// Submissions Inspection API for Admin
+app.get('/api/admin/submissions', requireAdminAuth, (_req: Request, res: Response) => {
+  const subs = submissionStore.getRecent(200);
+  res.json({ success: true, count: subs.length, submissions: subs });
+});
 
-  // Reset challenge solve stats
+// Evaluated Leaderboard Direct Query API (Reads from SQLite leaderboard table)
+app.get('/api/scoreboard', (_req: Request, res: Response) => {
+  const standings = leaderboardStore.getLeaderboard();
+  res.json({
+    success: true,
+    count: standings.length,
+    timestamp: Date.now(),
+    leaderboard: standings.length > 0 ? standings : getSortedLeaderboard(),
+  });
+});
+
+// Leaderboard Snapshot History for Admin Auditing
+app.get('/api/admin/leaderboard/snapshots', requireAdminAuth, (_req: Request, res: Response) => {
+  const snapshots = leaderboardStore.getSnapshots(20);
+  res.json({ success: true, count: snapshots.length, snapshots });
+});
+
+// Competition Reset Option: Complete system wipe for fresh tournament
+app.post('/api/admin/reset', requireAdminAuth, async (req: Request, res: Response) => {
+  // 1. Wipe all teams from memory, SQLite database, and disk backup
+  teams.clear();
+  teamStore.clearAll();
+
+  // 2. Wipe user activities
+  activityFeed = [];
+  activityFeedStore.clearAll();
+
+  // 3. Wipe screenshots from memory and SQLite
+  screenshotAlerts.length = 0;
+  screenshotStore.clearAll();
+
+  // 4. Wipe security logs & challenge submissions
+  securityLogs = [];
+  securityLogStore.clearAll();
+  submissionStore.clearAll();
+
+  // 5. Wipe system-wide audit logs & trails
+  auditLogStore.clearAll();
+
+  // 6. Wipe user feedbacks
+  feedbackStore.clearAll();
+
+  // 7. Wipe leaderboard snapshots
+  leaderboardStore.clearAll();
+
+  // 7. Reset challenge solve stats in memory and SQLite
   challenges.forEach((c) => {
     c.solvesCount = 0;
     c.firstBloodTeam = null;
+    challengeStore.update(c.id, { solvesCount: 0, firstBloodTeam: null });
   });
 
+  // 8. Reset competition timer and state
   competitionState.status = 'running';
   competitionState.remainingSeconds = competitionState.durationSeconds;
   competitionState.writeupMode = false;
   competitionState.announcement = null;
+  competitionStateStore.saveState(competitionState);
 
-  // Reset to clean state (no fake teams)
+  // 9. Invalidate Redis caches and notify all connected clients
+  await redisCache.invalidate('cache:');
+  io.emit('competition_reset');
+  io.emit('leaderboard_update', []);
+  io.emit('activity_event', {
+    id: 'act-' + crypto.randomUUID(),
+    timestamp: Date.now(),
+    type: 'competition_reset',
+    message: 'Competition reset by Administrator. All teams, activities, and scores cleared for a fresh tournament.',
+  });
   broadcastLeaderboard();
   broadcastState();
 
-  res.json({ success: true, message: 'Competition state reset successfully.' });
+  res.json({
+    success: true,
+    message: 'All teams, user activities, screenshots, audit trails, submissions, logs, and CSV data have been completely wiped.',
+  });
 });
 
 // Admin Challenge CRUD
@@ -1283,7 +2421,7 @@ app.get('/api/admin/challenges', requireAdminAuth, (req: Request, res: Response)
   res.json(challenges);
 });
 
-// 2.) Admin Challenge Creation with Zod
+// 2.) Admin Challenge Creation with Zod & SQLite Persistence
 app.post('/api/admin/challenges', requireAdminAuth, (req: Request, res: Response) => {
   const validation = ChallengeAdminSchema.safeParse(req.body);
   if (!validation.success) {
@@ -1296,21 +2434,44 @@ app.post('/api/admin/challenges', requireAdminAuth, (req: Request, res: Response
     title: sanitizeInput(data.title),
     section: data.section,
     category: data.category,
-    points: data.points,
+    points: data.points, // Evaluated exactly as admin specifies
     difficulty: data.difficulty,
     description: sanitizeInput(data.description),
     flag: data.flag.trim(),
     flagFormat: data.flagFormat || 'CTF{...}',
     maxAttempts: data.maxAttempts || 5,
-    hints: Array.isArray(req.body.hints) ? req.body.hints : [],
+    hints: Array.isArray(req.body.hints)
+      ? req.body.hints.map((h: any, idx: number) => ({
+          id: h.id || `hint-${Date.now()}-${idx + 1}`,
+          title: sanitizeInput(h.title || `Hint #${idx + 1}`),
+          cost: Math.max(0, Number(h.cost || 0)),
+          content: sanitizeInput(h.content || ''),
+        }))
+      : [],
     writeup: req.body.writeup || { summary: '', steps: [] },
     isEnabled: true,
     solvesCount: 0,
     firstBloodTeam: null,
   };
 
+  challengeStore.create(newChallenge);
   challenges.push(newChallenge);
+  challengeMap.set(newChallenge.id, newChallenge);
   broadcastState();
+
+  recordAuditLog(
+    'ADMIN',
+    'ADMIN_CONSOLE',
+    'ADMIN_CHALLENGE_CREATE',
+    {
+      challengeId: newChallenge.id,
+      title: newChallenge.title,
+      points: newChallenge.points,
+      category: newChallenge.category,
+    },
+    getClientIp(req)
+  );
+
   res.json({ success: true, challenge: newChallenge });
 });
 
@@ -1318,18 +2479,42 @@ app.put('/api/admin/challenges/:id', requireAdminAuth, (req: Request, res: Respo
   const chal = challenges.find((c) => c.id === req.params.id);
   if (!chal) return res.status(404).json({ success: false, error: 'Challenge not found' });
 
-  const { title, section, category, points, difficulty, description, flag, maxAttempts, isEnabled } = req.body;
+  const { title, section, category, points, difficulty, description, flag, maxAttempts, isEnabled, hints, writeup } = req.body;
   if (title) chal.title = sanitizeInput(title);
   if (section) chal.section = section;
   if (category) chal.category = category;
-  if (typeof points === 'number') chal.points = Math.max(10, Math.min(1000, points));
+  if (typeof points === 'number') chal.points = Math.max(1, Math.floor(points)); // Evaluated as admin says
   if (difficulty) chal.difficulty = difficulty;
   if (description) chal.description = sanitizeInput(description);
   if (flag) chal.flag = flag.trim();
-  if (typeof maxAttempts === 'number') chal.maxAttempts = Math.max(1, Math.min(20, maxAttempts));
+  if (typeof maxAttempts === 'number') chal.maxAttempts = Math.max(1, Math.min(100, maxAttempts));
   if (typeof isEnabled === 'boolean') chal.isEnabled = isEnabled;
+  if (Array.isArray(hints)) {
+    chal.hints = hints.map((h: any, idx: number) => ({
+      id: h.id || `hint-${Date.now()}-${idx + 1}`,
+      title: sanitizeInput(h.title || `Hint #${idx + 1}`),
+      cost: Math.max(0, Number(h.cost || 0)),
+      content: sanitizeInput(h.content || ''),
+    }));
+  }
+  if (writeup) chal.writeup = writeup;
 
+  challengeStore.update(chal.id, chal);
+  challengeMap.set(chal.id, chal);
   broadcastState();
+
+  recordAuditLog(
+    'ADMIN',
+    'ADMIN_CONSOLE',
+    'ADMIN_CHALLENGE_UPDATE',
+    {
+      challengeId: chal.id,
+      title: chal.title,
+      points: chal.points,
+    },
+    getClientIp(req)
+  );
+
   res.json({ success: true, challenge: chal });
 });
 
@@ -1337,9 +2522,35 @@ app.delete('/api/admin/challenges/:id', requireAdminAuth, (req: Request, res: Re
   const idx = challenges.findIndex((c) => c.id === req.params.id);
   if (idx === -1) return res.status(404).json({ success: false, error: 'Challenge not found' });
 
-  challenges.splice(idx, 1);
+  const [removed] = challenges.splice(idx, 1);
+  challengeMap.delete(removed.id);
+  challengeStore.delete(removed.id);
   broadcastState();
+
+  recordAuditLog(
+    'ADMIN',
+    'ADMIN_CONSOLE',
+    'ADMIN_CHALLENGE_DELETE',
+    {
+      challengeId: removed.id,
+      title: removed.title,
+    },
+    getClientIp(req)
+  );
+
   res.json({ success: true });
+});
+
+// Sync challenges from questions.json into memory and SQLite
+app.post('/api/admin/challenges/sync-questions', requireAdminAuth, (_req: Request, res: Response) => {
+  const count = challengeStore.syncFromQuestionsJson(path.join(__dirname, 'questions.json'));
+  challenges = challengeStore.getAll();
+  challengeMap.clear();
+  for (const chal of challenges) {
+    challengeMap.set(chal.id, chal);
+  }
+  broadcastState();
+  res.json({ success: true, syncedCount: count, totalChallenges: challenges.length });
 });
 
 // 5.) Admin Attachment Upload / Security Validation for Challenge
@@ -1368,18 +2579,19 @@ app.post('/api/admin/challenges/:id/attachment', requireAdminAuth, (req: Request
     content: String(content),
   };
 
+  challengeStore.update(chal.id, { attachment: chal.attachment });
   broadcastState();
   res.json({ success: true, attachment: { fileName: cleanFilename, size: sizeKb } });
 });
 
-// Admin Team Management
-app.get('/api/admin/teams', requireAdminAuth, (req: Request, res: Response) => {
-  res.json(Array.from(teams.values()));
+// Admin Team Management - Compulsory Persistent Roster Sync
+app.get('/api/admin/teams', requireAdminAuth, (_req: Request, res: Response) => {
+  res.json(teamStore.getAll());
 });
 
 // 2.) Admin Score Adjust with Zod
 app.post('/api/admin/teams/:id/adjust-score', requireAdminAuth, (req: Request, res: Response) => {
-  const team = teams.get(req.params.id);
+  const team = teams.get(req.params.id) || teamStore.getById(req.params.id);
   if (!team) return res.status(404).json({ success: false, error: 'Team not found' });
 
   const validation = ScoreAdjustSchema.safeParse(req.body);
@@ -1389,6 +2601,9 @@ app.post('/api/admin/teams/:id/adjust-score', requireAdminAuth, (req: Request, r
 
   const { delta, reason } = validation.data;
   team.score += delta;
+  teams.set(team.id, team);
+  teamStore.update(team.id, { score: team.score });
+  redisCache.zadd('ctf:leaderboard:zset', team.score, team.id).catch(() => {});
 
   const event: ActivityFeedEvent = {
     id: 'act-' + crypto.randomUUID(),
@@ -1400,6 +2615,21 @@ app.post('/api/admin/teams/:id/adjust-score', requireAdminAuth, (req: Request, r
   };
   activityFeed.unshift(event);
   io.emit('activity_event', event);
+  io.emit('admin:team_updated', team);
+
+  recordAuditLog(
+    'ADMIN',
+    'ADMIN_CONSOLE',
+    'ADMIN_SCORE_ADJUST',
+    {
+      targetTeam: team.teamName,
+      targetTeamId: team.id,
+      delta,
+      reason: sanitizeInput(reason),
+      newScore: team.score,
+    },
+    getClientIp(req)
+  );
 
   broadcastLeaderboard();
   broadcastState();
@@ -1408,35 +2638,118 @@ app.post('/api/admin/teams/:id/adjust-score', requireAdminAuth, (req: Request, r
 });
 
 app.post('/api/admin/teams/:id/unlock-challenge', requireAdminAuth, (req: Request, res: Response) => {
-  const team = teams.get(req.params.id);
+  const team = teams.get(req.params.id) || teamStore.getById(req.params.id);
   if (!team) return res.status(404).json({ success: false, error: 'Team not found' });
 
   const { challengeId } = req.body;
   team.failedAttempts[challengeId] = 0; // reset attempts
+  teams.set(team.id, team);
+  teamStore.update(team.id, { failedAttempts: team.failedAttempts });
+  io.emit('admin:team_updated', team);
+
   broadcastState();
   res.json({ success: true, message: `Challenge unlocked for team ${team.teamName}` });
 });
 
 app.post('/api/admin/teams/:id/clear-anomaly', requireAdminAuth, (req: Request, res: Response) => {
-  const team = teams.get(req.params.id);
+  const team = teams.get(req.params.id) || teamStore.getById(req.params.id);
   if (!team) return res.status(404).json({ success: false, error: 'Team not found' });
 
   team.isFlaggedAnomaly = false;
   team.anomalyReason = undefined;
+  teams.set(team.id, team);
+  teamStore.update(team.id, { isFlaggedAnomaly: false, anomalyReason: undefined });
+  io.emit('admin:team_updated', team);
+
   broadcastLeaderboard();
   res.json({ success: true });
 });
 
+// Admin Clear Strikes For ALL Teams
+app.post('/api/admin/teams/clear-all-strikes', requireAdminAuth, async (req: Request, res: Response) => {
+  const allTeams = Array.from(teams.values());
+  let count = 0;
+  for (const team of allTeams) {
+    if (team.strikes > 0 || team.isDisqualified) {
+      team.strikes = 0;
+      team.isDisqualified = false;
+      team.disqualifiedReason = undefined;
+      team.disqualifiedAt = undefined;
+      teams.set(team.id, team);
+      teamStore.update(team.id, {
+        strikes: 0,
+        isDisqualified: false,
+        disqualifiedReason: undefined,
+        disqualifiedAt: undefined,
+      });
+      io.emit('admin:team_updated', team);
+      io.emit('team:updated', team);
+      io.emit('team:strikes_reset', { teamId: team.id });
+      count++;
+    }
+  }
+
+  logSecurityEvent('SECURITY_STRIKE', `Admin arbitration cleared strikes for ALL teams (${count} updated)`, getClientIp(req), 'ALL_TEAMS', 'low');
+
+  recordAuditLog(
+    'ADMIN',
+    'ADMIN_CONSOLE',
+    'ADMIN_CLEAR_ALL_STRIKES',
+    { updatedCount: count },
+    getClientIp(req)
+  );
+
+  await redisCache.invalidate('cache:');
+  broadcastLeaderboard();
+  broadcastState();
+
+  res.json({ success: true, message: `Successfully reset strikes for all teams (${count} updated).`, updatedCount: count });
+});
+
 // Admin Strike Clear / Reinstate
 app.post('/api/admin/teams/:id/clear-strikes', requireAdminAuth, async (req: Request, res: Response) => {
-  const team = teams.get(req.params.id);
+  const team = teams.get(req.params.id) || teamStore.getById(req.params.id);
   if (!team) return res.status(404).json({ success: false, error: 'Team not found' });
 
   team.strikes = 0;
   team.isDisqualified = false;
   team.disqualifiedReason = undefined;
+  team.disqualifiedAt = undefined;
+  teams.set(team.id, team);
+  teamStore.update(team.id, {
+    strikes: 0,
+    isDisqualified: false,
+    disqualifiedReason: undefined,
+    disqualifiedAt: undefined,
+  });
+  io.emit('admin:team_updated', team);
+  io.emit('team:updated', team);
+  io.emit('team:strikes_reset', { teamId: team.id });
 
   logSecurityEvent('SECURITY_STRIKE', `Admin arbitration cleared strikes and reinstated team [${team.teamName}]`, getClientIp(req), team.teamName, 'low');
+
+  recordAuditLog(
+    'ADMIN',
+    'ADMIN_CONSOLE',
+    'REINSTATE_TEAM',
+    {
+      targetTeam: team.teamName,
+      targetTeamId: team.id,
+      action: 'reinstated_cleared_strikes',
+    },
+    getClientIp(req)
+  );
+
+  recordAuditLog(
+    'ADMIN',
+    'ADMIN_CONSOLE',
+    'ADMIN_CLEAR_STRIKES',
+    {
+      targetTeam: team.teamName,
+      targetTeamId: team.id,
+    },
+    getClientIp(req)
+  );
 
   await redisCache.invalidate('cache:');
   broadcastLeaderboard();
@@ -1445,17 +2758,87 @@ app.post('/api/admin/teams/:id/clear-strikes', requireAdminAuth, async (req: Req
   res.json({ success: true, message: `Strikes reset for team ${team.teamName}`, team });
 });
 
-// Admin Manual Disqualify
-app.post('/api/admin/teams/:id/disqualify', requireAdminAuth, async (req: Request, res: Response) => {
-  const team = teams.get(req.params.id);
+// Admin Reset Team Ready / Start Status (Return team to Pre-Competition "START COMPETITION" page)
+app.post('/api/admin/teams/:id/reset-ready', requireAdminAuth, async (req: Request, res: Response) => {
+  const team = teams.get(req.params.id) || teamStore.getById(req.params.id);
   if (!team) return res.status(404).json({ success: false, error: 'Team not found' });
 
-  team.strikes = 5;
+  team.hasStarted = false;
+  team.startedAt = undefined;
+  teams.set(team.id, team);
+  teamStore.update(team.id, {
+    hasStarted: false,
+    startedAt: undefined,
+  });
+  io.emit('admin:team_updated', team);
+  io.emit('team:reset_ready', { teamId: team.id });
+
+  logSecurityEvent('COMPETITION_STARTED', `Admin reset ready/start status for team [${team.teamName}] (returned to gate)`, getClientIp(req), team.teamName, 'low');
+  await redisCache.invalidate('cache:');
+  broadcastLeaderboard();
+  broadcastState();
+
+  res.json({ success: true, message: `Ready status reset for team ${team.teamName}. Returned to start gate.`, team });
+});
+
+// Admin Reset ALL Teams Ready / Start Status back to Pre-Competition Start Gate
+app.post('/api/admin/teams/reset-all-ready', requireAdminAuth, async (req: Request, res: Response) => {
+  const allTeams = teamStore.getAll();
+  for (const t of allTeams) {
+    t.hasStarted = false;
+    t.startedAt = undefined;
+    teams.set(t.id, t);
+    teamStore.update(t.id, {
+      hasStarted: false,
+      startedAt: undefined,
+    });
+    io.emit('team:reset_ready', { teamId: t.id });
+  }
+
+  logSecurityEvent('COMPETITION_STARTED', `Admin reset ready/start status for ALL teams (returned to gate)`, getClientIp(req), undefined, 'low');
+  await redisCache.invalidate('cache:');
+  broadcastLeaderboard();
+  broadcastState();
+
+  res.json({ success: true, message: 'All squads reset back to Pre-Competition Gate.' });
+});
+
+// Admin Manual Disqualify (Strict 10-Strike Cap)
+app.post('/api/admin/teams/:id/disqualify', requireAdminAuth, async (req: Request, res: Response) => {
+  const team = teams.get(req.params.id) || teamStore.getById(req.params.id);
+  if (!team) return res.status(404).json({ success: false, error: 'Team not found' });
+
+  const customReason =
+    (typeof req.body?.reason === 'string' && req.body.reason.trim())
+      ? req.body.reason.trim()
+      : 'Manual Disqualification by Competition Arbitration';
+
+  team.strikes = 10;
   team.isDisqualified = true;
   team.disqualifiedAt = Date.now();
-  team.disqualifiedReason = 'Manual Disqualification by Competition Arbitration';
+  team.disqualifiedReason = customReason;
+  teams.set(team.id, team);
+  teamStore.update(team.id, {
+    strikes: 10,
+    isDisqualified: true,
+    disqualifiedAt: team.disqualifiedAt,
+    disqualifiedReason: team.disqualifiedReason,
+  });
+  io.emit('admin:team_updated', team);
 
-  logSecurityEvent('TEAM_DISQUALIFIED', `Team [${team.teamName}] manually DISQUALIFIED by Admin Arbitration.`, getClientIp(req), team.teamName, 'high');
+  logSecurityEvent('TEAM_DISQUALIFIED', `Team [${team.teamName}] manually DISQUALIFIED by Admin Arbitration. Reason: ${customReason}`, getClientIp(req), team.teamName, 'high');
+
+  recordAuditLog(
+    'ADMIN',
+    'ADMIN_CONSOLE',
+    'ADMIN_DISQUALIFY_TEAM',
+    {
+      targetTeam: team.teamName,
+      targetTeamId: team.id,
+      reason: team.disqualifiedReason,
+    },
+    getClientIp(req)
+  );
 
   io.emit('team_disqualified', {
     teamId: team.id,
@@ -1500,27 +2883,60 @@ app.get('/api/admin/loadbalancer/status', requireAdminAuth, (req: Request, res: 
   });
 });
 
-// Admin Security Logs
-app.get('/api/admin/logs', requireAdminAuth, (req: Request, res: Response) => {
+// Admin Security Logs & Activities
+app.get('/api/admin/logs', requireAdminAuth, (_req: Request, res: Response) => {
   res.json({
     securityLogs,
-    activityFeed,
+    activityFeed: activityFeedStore.getRecent(250),
   });
 });
 
+// Admin Purge Security Incident Logs
+app.post('/api/admin/logs/clear', requireAdminAuth, (req: Request, res: Response) => {
+  securityLogs.length = 0;
+  securityLogStore.clearAll();
+  recordAuditLog('ADMIN', 'ADMIN_CONSOLE', 'SYSTEM_INFO', { action: 'Security incident logs purged by admin' }, getClientIp(req));
+  io.emit('security_logs_cleared');
+  res.json({ success: true, message: 'Security incident logs successfully cleared.' });
+});
+
+// Admin Dedicated Timestamped Audit Logs API
+app.get('/api/admin/audit-logs', requireAdminAuth, (req: Request, res: Response) => {
+  const limit = Math.min(2000, Math.max(10, parseInt(req.query.limit as string, 10) || 300));
+  const actor = req.query.actor as string;
+  const logs = actor ? auditLogStore.getByActor(actor, limit) : auditLogStore.getAll(limit);
+  res.json({
+    success: true,
+    count: logs.length,
+    total: auditLogStore.count(),
+    logs,
+  });
+});
+
+// Advanced Admin CSV Export Feature: System-Wide Timestamped Audit Trail
+app.get(['/api/admin/export-audit-csv', '/api/admin/export-audit-logs-csv'], requireAdminAuth, (_req: Request, res: Response) => {
+  const csv = auditLogStore.exportCsv(10000);
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="the_final_decrypt_audit_trail_utc.csv"');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.send(csv);
+});
+
 // Export Scores to CSV with Secure Sanitization
-app.get('/api/admin/export-csv', requireAdminAuth, (req: Request, res: Response) => {
+app.get(['/api/admin/export-csv', '/api/admin/export-scoreboard-csv'], requireAdminAuth, (_req: Request, res: Response) => {
   const leaderboard = getSortedLeaderboard();
-  let csv = 'Rank,Team Name,Score,Solves,Total Failed Attempts,Last Solve Time,Members,Anomaly Flagged\n';
+  let csv = 'Rank,Team Name,Email,Score,Solves,Total Failed Attempts,Last Solve Time,Members,Anomaly Flagged\n';
 
   leaderboard.forEach((entry) => {
+    const teamObj = teamStore.getById(entry.teamId);
+    const emailStr = (teamObj?.email || '').replace(/"/g, '""');
     const membersStr = entry.members.join('; ').replace(/"/g, '""');
     const lastSolveDate = entry.lastSolveTime ? new Date(entry.lastSolveTime).toISOString() : 'N/A';
-    csv += `${entry.rank},"${entry.teamName}",${entry.score},${entry.solvesCount},${entry.totalFailedAttempts},"${lastSolveDate}","${membersStr}",${entry.isFlaggedAnomaly}\n`;
+    csv += `${entry.rank},"${entry.teamName}","${emailStr}",${entry.score},${entry.solvesCount},${entry.totalFailedAttempts},"${lastSolveDate}","${membersStr}",${entry.isFlaggedAnomaly}\n`;
   });
 
-  res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', 'attachment; filename="ctf_final_decrypt_leaderboard.csv"');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="the_final_decrypt_scoreboard.csv"');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.send(csv);
 });
@@ -1529,6 +2945,15 @@ app.get('/api/admin/export-csv', requireAdminAuth, (req: Request, res: Response)
 // Catches all uncaught errors without leaking stack traces or internals to clients
 app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
   const ip = getClientIp(req);
+
+  // Gracefully handle malformed client JSON payloads as 400 Bad Request without logging SYSTEM_ERROR
+  if (err instanceof SyntaxError && (('status' in err && (err as any).status === 400) || 'body' in err)) {
+    return res.status(400).json({
+      success: false,
+      error: 'Malformed JSON payload in request body.',
+    });
+  }
+
   console.error('[UNCAUGHT SERVER EXCEPTION]', err);
 
   logSecurityEvent('SYSTEM_ERROR', `Internal exception caught: ${err?.message || 'Unknown error'}`, ip, undefined, 'high');
@@ -1554,10 +2979,33 @@ async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
+      server: {
+        middlewareMode: true,
+        watch: {
+          ignored: [
+            '**/data/**',
+            '**/*.sqlite*',
+            '**/*.sqlite-journal*',
+            '**/dist/**',
+            '**/*.tmp*',
+          ],
+        },
+      },
+      appType: 'custom',
     });
     app.use(vite.middlewares);
+
+    app.use('*', async (req, res, next) => {
+      const url = req.originalUrl;
+      try {
+        let template = fs.readFileSync(path.resolve(__dirname, 'index.html'), 'utf-8');
+        template = await vite.transformIndexHtml(url, template);
+        res.status(200).set({ 'Content-Type': 'text/html' }).end(template);
+      } catch (e: any) {
+        vite.ssrFixStacktrace(e);
+        next(e);
+      }
+    });
   } else {
     app.use(express.static(path.join(__dirname, 'dist')));
     app.get('*', (_req, res) => {

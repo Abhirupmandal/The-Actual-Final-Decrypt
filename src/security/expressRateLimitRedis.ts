@@ -83,6 +83,7 @@ export function createFlagSubmissionRateLimiter(
     limit: 5, // Maximum 5 attempts
     standardHeaders: 'draft-7',
     legacyHeaders: false,
+    validate: false,
     store: new RedisStore({
       prefix: 'rl:ctf:flag:',
       sendCommand: sendCommandFn,
@@ -123,6 +124,7 @@ export function createAuthRateLimiter(
     limit: 5, // Maximum 5 attempts
     standardHeaders: 'draft-7',
     legacyHeaders: false,
+    validate: false,
     store: new RedisStore({
       prefix: 'rl:ctf:auth:',
       sendCommand: sendCommandFn,

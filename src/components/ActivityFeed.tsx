@@ -94,7 +94,7 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ events }) => {
           </div>
 
           {/* Filter tabs */}
-          <div className="flex items-center gap-1.5 bg-[#080b12] p-1.5 rounded-xl border border-slate-800 text-xs font-mono shrink-0">
+          <div className="flex items-center gap-1.5 bg-[#080b12] p-1.5 rounded-xl border border-slate-800 text-xs font-mono shrink-0 overflow-x-auto no-scrollbar max-w-full">
             {(['ALL', 'SOLVE', 'FIRST_BLOOD', 'ANNOUNCEMENT'] as const).map((t) => (
               <button
                 key={t}

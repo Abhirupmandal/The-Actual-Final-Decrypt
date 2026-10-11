@@ -29,11 +29,12 @@ export const WriteupModal: React.FC<WriteupModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
-      <div className="bg-[#0d111a] border-2 border-cyan-500/50 shadow-[0_0_35px_rgba(6,182,212,0.25)] rounded-xl p-6 max-w-2xl w-full max-h-[85vh] overflow-y-auto font-mono text-xs relative">
+    <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
+      <div className="bg-[#0d111a]/95 border border-cyan-500/60 shadow-[0_0_45px_rgba(0,240,255,0.25)] rounded-2xl p-6 sm:p-7 max-w-2xl w-full my-auto max-h-[88dvh] overflow-y-auto font-mono text-xs relative backdrop-blur-xl">
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00f0ff] to-transparent opacity-80" />
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-white p-1"
+          className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
           aria-label="Close writeup"
         >
           <X className="w-4 h-4" />

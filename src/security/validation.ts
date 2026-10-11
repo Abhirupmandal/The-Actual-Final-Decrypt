@@ -31,6 +31,10 @@ export const TeamSignupSchema = z.object({
     .regex(/^[a-zA-Z0-9_\-\s]+$/, {
       message: 'Team name may only contain letters, numbers, spaces, underscores, and hyphens.',
     }),
+  email: z
+    .string()
+    .email({ message: 'A valid email address is required.' })
+    .max(100, { message: 'Email address cannot exceed 100 characters.' }),
   password: z
     .string()
     .min(8, { message: 'Password must be at least 8 characters long.' })
@@ -55,8 +59,8 @@ export const TeamSignupSchema = z.object({
 export const TeamLoginSchema = z.object({
   teamName: z
     .string()
-    .min(3, { message: 'Team name must be at least 3 characters.' })
-    .max(30, { message: 'Team name cannot exceed 30 characters.' }),
+    .min(3, { message: 'Team name or email is required.' })
+    .max(100, { message: 'Team name or email cannot exceed 100 characters.' }),
   password: z
     .string()
     .min(1, { message: 'Password is required.' })
@@ -96,7 +100,7 @@ export const HintUnlockSchema = z.object({
 
 // 5. Challenge Create / Update Schema
 export const ChallengeAdminSchema = z.object({
-  title: z.string().min(3).max(100),
+  title: z.string().min(2).max(150),
   section: z.enum([
     'Section A (Find the Clue, Find the Key)',
     'Section B (The Decode Chamber)',
@@ -111,12 +115,22 @@ export const ChallengeAdminSchema = z.object({
     'WEB',
     'MISC',
   ]),
-  points: z.number().int().min(10).max(1000),
+  points: z.number().int().min(1).max(50000),
   difficulty: z.enum(['Easy', 'Medium', 'Hard', 'Insane']),
-  description: z.string().min(10).max(2000),
-  flag: z.string().min(5).max(200),
+  description: z.string().min(2).max(5000),
+  flag: z.string().min(1).max(300),
   flagFormat: z.string().default('CTF{...}'),
-  maxAttempts: z.number().int().min(1).max(20).default(5),
+  maxAttempts: z.number().int().min(1).max(100).default(5),
+  hints: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        title: z.string(),
+        cost: z.number().min(0),
+        content: z.string(),
+      })
+    )
+    .optional(),
 });
 
 // 6. Score Adjustment Schema

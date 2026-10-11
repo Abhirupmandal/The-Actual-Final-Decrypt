@@ -23,6 +23,7 @@ interface LeaderboardProps {
   entries: LeaderboardEntry[];
   currentTeamId?: string;
   hasDemoTeams?: boolean;
+  isAdmin?: boolean;
   onToggleDemoMode?: (mode: 'clean' | 'seed') => void;
   onOpenAuthModal?: () => void;
 }
@@ -31,6 +32,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
   entries,
   currentTeamId,
   hasDemoTeams,
+  isAdmin,
   onToggleDemoMode,
   onOpenAuthModal,
 }) => {
@@ -70,23 +72,30 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
     }
   };
 
-  const getRankBadge = (rank: number) => {
+  const getRankBadge = (rank: number, score: number = 0) => {
+    if (score === 0) {
+      return (
+        <span className="font-mono text-xs font-semibold text-slate-500 w-8 text-center" title="Not participated yet (0 points)">
+          #{rank}
+        </span>
+      );
+    }
     switch (rank) {
       case 1:
         return (
-          <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400/30 to-amber-600/20 text-amber-300 border border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.45)]">
+          <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400/30 to-amber-600/20 text-amber-300 border border-amber-400 shadow-[0_0_15px_rgba(251,191,36,0.45)]" title="1st Place Champion">
             <Crown className="w-4 h-4 text-amber-300" />
           </div>
         );
       case 2:
         return (
-          <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-slate-400/20 text-slate-200 border border-slate-300 shadow-[0_0_12px_rgba(203,213,225,0.3)]">
+          <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-slate-400/20 text-slate-200 border border-slate-300 shadow-[0_0_12px_rgba(203,213,225,0.3)]" title="2nd Place">
             <Medal className="w-4 h-4 text-slate-200" />
           </div>
         );
       case 3:
         return (
-          <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-amber-700/20 text-amber-400 border border-amber-600 shadow-[0_0_10px_rgba(217,119,6,0.25)]">
+          <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-amber-700/20 text-amber-400 border border-amber-600 shadow-[0_0_10px_rgba(217,119,6,0.25)]" title="3rd Place">
             <Medal className="w-4 h-4 text-amber-500" />
           </div>
         );
@@ -123,27 +132,29 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
-            {/* Demo / Live Mode Controls */}
-            {hasDemoTeams ? (
-              <button
-                onClick={() => handleModeToggle('clean')}
-                disabled={isUpdatingMode}
-                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-mono font-bold flex items-center gap-2 transition-all hover:border-[#00ff66]/40"
-                title="Remove sample teams to show only registered teams"
-              >
-                <Layers className="w-3.5 h-3.5 text-slate-400" />
-                <span>{isUpdatingMode ? 'UPDATING...' : 'CLEAR PREVIEW TEAMS'}</span>
-              </button>
-            ) : (
-              <button
-                onClick={() => handleModeToggle('seed')}
-                disabled={isUpdatingMode}
-                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-mono font-bold flex items-center gap-2 transition-all hover:border-[#00ff66]/40"
-                title="Load sample teams for testing"
-              >
-                <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
-                <span>{isUpdatingMode ? 'LOADING...' : 'LOAD PREVIEW TEAMS'}</span>
-              </button>
+            {/* Demo / Live Mode Controls (Admin Exclusive) */}
+            {isAdmin && (
+              hasDemoTeams ? (
+                <button
+                  onClick={() => handleModeToggle('clean')}
+                  disabled={isUpdatingMode}
+                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-mono font-bold flex items-center gap-2 transition-all hover:border-[#00ff66]/40"
+                  title="Remove sample teams to show only registered teams"
+                >
+                  <Layers className="w-3.5 h-3.5 text-slate-400" />
+                  <span>{isUpdatingMode ? 'UPDATING...' : 'CLEAR PREVIEW TEAMS'}</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => handleModeToggle('seed')}
+                  disabled={isUpdatingMode}
+                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-mono font-bold flex items-center gap-2 transition-all hover:border-[#00ff66]/40"
+                  title="Load sample teams for testing"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-slate-400" />
+                  <span>{isUpdatingMode ? 'LOADING...' : 'LOAD PREVIEW TEAMS'}</span>
+                </button>
+              )
             )}
 
             <button
@@ -185,7 +196,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
               <li><strong className="text-white">Primary Metric:</strong> Total accumulated points from valid flag decryptions.</li>
               <li><strong className="text-white">Tie-Breaker Level 1:</strong> Earliest recorded UTC timestamp reaching that exact score.</li>
               <li><strong className="text-white">Tie-Breaker Level 2:</strong> Lowest cumulative incorrect submission attempts across all challenges.</li>
-              <li><strong className="text-white">Disqualification Condition:</strong> Teams with 5 security strikes are permanently positioned at the base of the board.</li>
+              <li><strong className="text-white">Disqualification Condition:</strong> Teams disqualified upon Administrator Arbitration review are positioned at the base of the board.</li>
             </ol>
           </div>
         )}
@@ -207,8 +218,13 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
 
       {/* Scoreboard Table */}
       <div className="rounded-2xl bg-[#0d111a]/85 backdrop-blur-md border border-slate-800 overflow-hidden shadow-2xl">
+        {/* Mobile Swipe Guidance Banner */}
+        <div className="sm:hidden px-4 py-1.5 bg-slate-900/80 border-b border-slate-800 text-[10px] text-slate-400 font-mono flex items-center justify-between">
+          <span className="text-[#00ff66]">← SWIPE TABLE TO VIEW COLUMNS →</span>
+          <span>{filtered.length} TEAMS</span>
+        </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs font-mono">
+          <table className="w-full text-left border-collapse text-xs font-mono min-w-[680px]">
             <thead>
               <tr className="bg-[#080b12] border-b border-slate-800 text-slate-400">
                 <th className="py-3.5 px-4 w-20 text-center font-bold">RANK</th>
@@ -234,15 +250,22 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                   >
                     <td className="py-4 px-4 text-center">
                       <div className="flex justify-center">
-                        {getRankBadge(entry.rank)}
+                        {getRankBadge(entry.rank, entry.score)}
                       </div>
                     </td>
 
                     <td className="py-4 px-4">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`font-bold text-sm sm:text-base ${entry.isDisqualified ? 'text-red-400 line-through opacity-70' : 'text-white'}`}>
+                        <span className={`font-bold text-sm sm:text-base ${entry.isDisqualified ? 'text-red-400 line-through opacity-70' : entry.rank === 1 && entry.score > 0 ? 'text-amber-300 drop-shadow-[0_0_10px_rgba(251,191,36,0.5)]' : 'text-white'}`}>
                           {entry.teamName}
                         </span>
+
+                        {entry.rank === 1 && entry.score > 0 && (
+                          <span className="text-[10px] font-black text-amber-950 bg-gradient-to-r from-amber-400 to-amber-300 px-2 py-0.5 rounded shadow-[0_0_12px_rgba(251,191,36,0.6)] flex items-center gap-1">
+                            <Crown className="w-3 h-3 text-amber-950" />
+                            <span>1ST PLACE</span>
+                          </span>
+                        )}
 
                         {entry.isDisqualified && (
                           <span className="text-[10px] font-black text-red-300 bg-red-950 px-2 py-0.5 rounded border border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.4)] flex items-center gap-1 animate-pulse">
@@ -251,9 +274,19 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                           </span>
                         )}
 
+                        {!entry.isDisqualified && entry.score === 0 && (
+                          <span
+                            className="text-[10px] font-bold text-slate-300 bg-slate-800/90 px-2 py-0.5 rounded border border-slate-700 flex items-center gap-1"
+                            title="Logged in competitor awaiting first flag solve"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                            <span>{entry.totalFailedAttempts > 0 ? 'PARTICIPATING (0 PTS)' : 'LOGGED IN · 0 PTS'}</span>
+                          </span>
+                        )}
+
                         {!entry.isDisqualified && entry.strikes > 0 && (
                           <span className="text-[10px] font-bold text-amber-300 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-600/50">
-                            {entry.strikes}/5 STRIKES
+                            {entry.strikes}/10 STRIKES
                           </span>
                         )}
 
@@ -281,8 +314,8 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                     </td>
 
                     <td className="py-4 px-4 text-center">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 font-bold">
-                        <CheckCircle className="w-3.5 h-3.5 text-[#00ff66]" />
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${entry.solvesCount > 0 ? 'bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 font-bold' : 'bg-slate-900/40 border border-slate-800 text-slate-500'}`}>
+                        <CheckCircle className={`w-3.5 h-3.5 ${entry.solvesCount > 0 ? 'text-[#00ff66]' : 'text-slate-600'}`} />
                         <span>{entry.solvesCount}</span>
                       </span>
                     </td>
@@ -302,8 +335,8 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
 
                     <td className="py-4 px-4 text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Zap className="w-3.5 h-3.5 text-[#00ff66]" />
-                        <span className="text-base sm:text-lg font-black text-[#00ff66] tracking-wider drop-shadow-[0_0_8px_rgba(0,255,102,0.4)]">
+                        <Zap className={`w-3.5 h-3.5 ${entry.score > 0 ? 'text-[#00ff66]' : 'text-slate-600'}`} />
+                        <span className={`text-base sm:text-lg font-black tracking-wider ${entry.score > 0 ? 'text-[#00ff66] drop-shadow-[0_0_8px_rgba(0,255,102,0.4)]' : 'text-slate-500'}`}>
                           {entry.score}
                         </span>
                         <span className="text-[10px] text-slate-500 ml-0.5">PTS</span>

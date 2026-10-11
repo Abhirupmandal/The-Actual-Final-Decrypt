@@ -8,20 +8,26 @@ import {
   VolumeX,
   Lock,
   UserCheck,
+  User,
   LogOut,
   ChevronDown,
   Radio,
   BookOpen,
   Activity,
-  AlertTriangle,
   Zap,
+  AlertTriangle,
+  Menu,
+  X,
+  MessageSquareHeart,
 } from 'lucide-react';
 import type { CompetitionState, LeaderboardEntry } from '../types.ts';
 import { playCyberBlip, setAudioMuted } from '../utils/audio.ts';
 
+export type AppTab = 'challenges' | 'rules' | 'leaderboard' | 'activity' | 'feedback' | 'profile' | 'admin';
+
 interface HeaderProps {
-  currentTab: 'challenges' | 'leaderboard' | 'activity' | 'admin';
-  setCurrentTab: (tab: 'challenges' | 'leaderboard' | 'activity' | 'admin') => void;
+  currentTab: AppTab;
+  setCurrentTab: (tab: AppTab) => void;
   competitionState: CompetitionState;
   team: {
     id: string;
@@ -30,13 +36,15 @@ interface HeaderProps {
     score: number;
     strikes?: number;
     isDisqualified?: boolean;
+    hasStarted?: boolean;
   } | null;
   leaderboard: LeaderboardEntry[];
   onOpenAuthModal: () => void;
   onLogoutTeam: () => void;
-  onOpenAdminAuth: () => void;
   isAdminAuthenticated: boolean;
   isConnected: boolean;
+  adminOperatorName?: string;
+  isReadyToStart?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -47,12 +55,18 @@ export const Header: React.FC<HeaderProps> = ({
   leaderboard,
   onOpenAuthModal,
   onLogoutTeam,
-  onOpenAdminAuth,
   isAdminAuthenticated,
   isConnected,
+  adminOperatorName,
+  isReadyToStart,
 }) => {
   const [muted, setMutedState] = useState(false);
   const [showTeamMenu, setShowTeamMenu] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Only show the live competition countdown timer if admin is authenticated OR after the team has started
+  const showCompetitionTimer =
+    isAdminAuthenticated || (Boolean(team) && Boolean(isReadyToStart || team?.hasStarted));
 
   const toggleSound = () => {
     const next = !muted;
@@ -61,16 +75,12 @@ export const Header: React.FC<HeaderProps> = ({
     if (!next) playCyberBlip(1000);
   };
 
-  const handleTabClick = (tab: 'challenges' | 'leaderboard' | 'activity' | 'admin') => {
+  const handleTabClick = (tab: AppTab) => {
     playCyberBlip(750);
-    if (tab === 'admin' && !isAdminAuthenticated) {
-      onOpenAdminAuth();
-      return;
-    }
     setCurrentTab(tab);
+    setMobileMenuOpen(false);
   };
 
-  // Format seconds to HH:MM:SS
   const formatTime = (secs: number) => {
     const h = Math.floor(secs / 3600);
     const m = Math.floor((secs % 3600) / 60);
@@ -78,203 +88,290 @@ export const Header: React.FC<HeaderProps> = ({
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  // Find team's rank
   const teamRank = team
     ? leaderboard.find((l) => l.teamId === team.id)?.rank || '-'
     : null;
 
   const currentStrikes = team?.strikes || 0;
-  const isDisqualified = Boolean(team?.isDisqualified || currentStrikes >= 5);
+  const isDisqualified = Boolean(team?.isDisqualified);
 
-  const getStrikeBadge = () => {
+  // Minimal Clean Warning Meter Indicator (Exempt admin)
+  const renderStrikeIndicator = () => {
+    if (!team || isAdminAuthenticated || currentTab === 'admin') return null;
     if (isDisqualified) {
       return (
-        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-red-950/90 text-red-400 border border-red-500/80 shadow-[0_0_10px_rgba(239,68,68,0.5)] flex items-center gap-1 animate-pulse">
+        <span className="px-2 py-1 rounded-lg text-[10px] font-mono font-black bg-red-950/80 text-red-400 border border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.4)] flex items-center gap-1.5 animate-pulse shrink-0">
           <AlertTriangle className="w-3 h-3 text-red-400" />
-          <span>[DISQUALIFIED]</span>
-        </span>
-      );
-    }
-    if (currentStrikes >= 3) {
-      return (
-        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-red-950/70 text-red-400 border border-red-500/60 shadow-[0_0_10px_rgba(239,68,68,0.3)] flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping" />
-          <span>STRIKES: {currentStrikes}/5 [CRITICAL]</span>
+          <span>[DISQ]</span>
         </span>
       );
     }
     if (currentStrikes > 0) {
       return (
-        <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-950/70 text-amber-300 border border-amber-500/50 shadow-[0_0_8px_rgba(245,158,11,0.25)] flex items-center gap-1">
+        <span className="px-2 py-1 rounded-lg text-[10px] font-mono font-bold bg-amber-950/70 text-amber-300 border border-amber-500/50 shadow-[0_0_8px_rgba(245,158,11,0.2)] flex items-center gap-1 shrink-0">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-          <span>STRIKES: {currentStrikes}/5 [ELEVATED]</span>
+          <span className="hidden sm:inline">WARNINGS: </span>
+          <span className="sm:hidden">WRN: </span>
+          <span>{currentStrikes}</span>
         </span>
       );
     }
     return (
-      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-950/60 text-[#00ff66] border border-emerald-500/40 shadow-[0_0_8px_rgba(0,255,102,0.15)] flex items-center gap-1">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#00ff66]" />
-        <span>STRIKES: 0/5 [NOMINAL]</span>
+      <span className="px-2 py-1 rounded-lg text-[10px] font-mono font-bold bg-[#08121d] text-slate-400 border border-slate-800 flex items-center gap-1 shrink-0">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#00ff41]" />
+        <span className="hidden sm:inline">WARNINGS: </span>
+        <span className="sm:hidden">WRN: </span>
+        <span>0</span>
       </span>
     );
   };
 
+  const navTabs: { id: AppTab; label: string; shortLabel: string; icon: React.FC<{ className?: string }> }[] = [
+    { id: 'challenges', label: 'CHALLENGES', shortLabel: 'CHALLENGES', icon: Terminal },
+    { id: 'rules', label: 'RULES & INFO', shortLabel: 'RULES', icon: BookOpen },
+    { id: 'leaderboard', label: 'LEADERBOARD', shortLabel: 'LEADERBOARD', icon: Trophy },
+    { id: 'activity', label: 'LIVE FEED', shortLabel: 'FEED', icon: Radio },
+    { id: 'feedback', label: 'FEEDBACK', shortLabel: 'FEEDBACK', icon: MessageSquareHeart },
+    { id: 'profile', label: 'PROFILE', shortLabel: 'PROFILE', icon: User },
+  ];
+
   return (
-    <header className="sticky top-0 z-50 bg-[#07090e]/95 backdrop-blur-xl border-b border-[#00ff66]/25 shadow-[0_4px_30px_rgba(0,0,0,0.85)]">
-      {/* Top Cyber Command Bar */}
-      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16 md:h-20 gap-2 sm:gap-4">
-          {/* Neon Glow Branding */}
-          <div className="flex items-center gap-3">
-            <div className="relative flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-[#0d111a] border border-[#00ff66]/60 text-[#00ff66] shadow-[0_0_18px_rgba(0,255,102,0.35)] shrink-0 group">
-              <Terminal className="w-5 h-5 sm:w-6 sm:h-6 transition-transform group-hover:scale-110" />
-              <div className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#00ff66] animate-ping opacity-80" />
-              <div className="absolute -bottom-1 -left-1 w-1.5 h-1.5 rounded-full bg-[#00f0ff]" />
-            </div>
+    <header
+      className="sticky top-0 z-50 transition-all duration-300"
+      style={{
+        background: 'rgba(8, 15, 22, 0.85)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        borderBottom: '1px solid rgba(0, 255, 65, 0.2)',
+        boxShadow: '0 4px 20px rgba(0, 255, 65, 0.15), 0 10px 30px rgba(0, 0, 0, 0.85)',
+      }}
+    >
+      {/* Holographic Neon Accent Line */}
+      <div className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-transparent via-[#00ff41]/60 to-transparent pointer-events-none" />
 
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-mono font-black text-sm sm:text-base md:text-lg tracking-wider text-white flex items-center gap-1.5 drop-shadow-[0_0_10px_rgba(0,255,102,0.5)]">
-                  <span className="text-[#00ff66] animate-pulse">&gt;</span>
-                  <span>THE FINAL DECRYPTERS</span>
-                </span>
-                <span className="hidden sm:inline-block text-[10px] font-mono tracking-widest text-[#00f0ff] border border-[#00f0ff]/40 px-2 py-0.5 rounded-md bg-[#00f0ff]/10 shadow-[0_0_8px_rgba(0,240,255,0.2)] font-semibold">
-                  ROUND 2: NO CLUE, NO MERCY
-                </span>
+      {/* Main 3-Column Header Bar */}
+      <div className="w-full px-2 sm:px-4 lg:px-6">
+        <div className="flex items-center justify-between h-16 sm:h-18 gap-2">
+          
+          {/* ================= COLUMN 1 (LEFT): BRANDING LOGO & TITLE ================= */}
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={() => handleTabClick('challenges')}
+              className="flex items-center gap-2.5 group text-left cursor-pointer transition-transform duration-200 hover:scale-[1.02]"
+              title="The Final Decrypt"
+            >
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#050e18]/90 border border-[#00ff41]/50 flex items-center justify-center text-[#00ff41] shadow-[0_0_15px_rgba(0,255,65,0.3)] group-hover:border-[#00ff41] group-hover:shadow-[0_0_20px_rgba(0,255,65,0.55)] transition-all">
+                <Terminal className="w-4 h-4 sm:w-5 sm:h-5 text-[#00ff41]" />
               </div>
-
-              {/* Live Telemetry Bar */}
-              <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-[11px] font-mono text-slate-400 mt-0.5">
-                <div className="flex items-center gap-1.5">
-                  <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-[#00ff66] shadow-[0_0_8px_#00ff66] animate-pulse' : 'bg-red-500 shadow-[0_0_8px_#ff3366]'}`} />
-                  <span className={isConnected ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>
-                    {isConnected ? 'WS: CONNECTED' : 'WS: RECONNECTING'}
+              <div>
+                <div className="font-mono font-black text-sm sm:text-base tracking-wider text-white flex items-center gap-1.5 drop-shadow-[0_0_12px_rgba(0,255,65,0.6)]">
+                  <span className="text-[#00ff41] animate-pulse">&gt;</span>
+                  <span className="bg-gradient-to-r from-white via-slate-100 to-[#e2e8f0] bg-clip-text text-transparent">
+                    THE FINAL DECRYPT
                   </span>
                 </div>
-                <span className="text-slate-600">|</span>
-                <span className="hidden md:inline-flex items-center gap-1 text-slate-400">
-                  <Activity className="w-3 h-3 text-[#00f0ff]" />
-                  <span>DEFENSE TELEMETRY LIVE</span>
-                </span>
-                {team && (
-                  <>
-                    <span className="hidden sm:inline text-slate-600">|</span>
-                    <div className="hidden sm:inline-flex">
-                      {getStrikeBadge()}
-                    </div>
-                  </>
-                )}
+                <div className="text-[10px] font-mono text-slate-400 tracking-wider flex items-center gap-1.5">
+                  <span className="text-[#00f0ff] font-bold">ROUND 2:</span>
+                  <span>NO CLUE, NO MERCY</span>
+                </div>
               </div>
-            </div>
+            </button>
           </div>
 
-          {/* Central Live Synced Timer */}
-          <div className="hidden lg:flex items-center gap-3 px-4 py-2 rounded-xl bg-[#0d111a]/90 border border-emerald-500/40 shadow-[0_0_20px_rgba(0,255,102,0.1),inset_0_0_12px_rgba(0,255,102,0.05)] backdrop-blur-md">
-            <div className="relative">
-              <Clock className={`w-5 h-5 ${competitionState.status === 'running' ? 'text-[#00ff66] animate-pulse' : 'text-amber-400'}`} />
-              <div className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#00ff66] animate-ping opacity-60" />
-            </div>
-            <div>
-              <div className="text-[10px] font-mono text-slate-400 flex items-center gap-1.5 tracking-wider">
-                <span>TIME REMAINING</span>
-                <span className={`w-1.5 h-1.5 rounded-full ${competitionState.status === 'running' ? 'bg-[#00ff66]' : 'bg-amber-400'}`} />
-                <span className="uppercase text-[9px] font-bold text-slate-300">
-                  [{competitionState.status}]
-                </span>
-              </div>
-              <div className="font-mono text-xl font-black tracking-widest text-emerald-400 tabular-nums drop-shadow-[0_0_8px_rgba(0,255,102,0.5)]">
-                {formatTime(competitionState.remainingSeconds)}
-              </div>
-            </div>
+          {/* ================= COLUMN 2 (CENTER): CENTERED NAVIGATION TABS ================= */}
+          <nav className="hidden lg:flex items-center justify-center shrink-0">
+            <div className="flex items-center gap-0.5 xl:gap-1 p-0.5 xl:p-1 rounded-xl bg-[#040a12]/90 border border-slate-800/90 backdrop-blur-md shadow-inner">
+              {navTabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = currentTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => handleTabClick(tab.id)}
+                    className={`px-2 xl:px-2.5 py-1.5 rounded-lg font-mono text-[11px] xl:text-xs font-bold transition-all duration-200 flex items-center gap-1 xl:gap-1.5 cursor-pointer whitespace-nowrap ${
+                      isActive
+                        ? 'text-[#00ff41] bg-[#00ff41]/15 border border-[#00ff41]/60 shadow-[0_0_12px_rgba(0,255,65,0.3)]'
+                        : 'text-slate-400 hover:text-[#00ff41] hover:bg-[#00ff41]/10 border border-transparent'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5 shrink-0" />
+                    <span className="hidden xl:inline">{tab.label}</span>
+                    <span className="xl:hidden">{tab.shortLabel}</span>
+                  </button>
+                );
+              })}
 
-            {competitionState.writeupMode && (
-              <div className="ml-2 px-2.5 py-1 rounded-md bg-cyan-500/15 border border-cyan-400/50 text-cyan-300 text-[10px] font-mono font-bold flex items-center gap-1 shadow-[0_0_10px_rgba(0,240,255,0.25)]">
-                <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
-                <span>WRITEUPS UNLOCKED</span>
+              {/* Admin Panel Tab Item */}
+              {isAdminAuthenticated && (
+                <button
+                  onClick={() => handleTabClick('admin')}
+                  className={`px-2 xl:px-2.5 py-1.5 rounded-lg font-mono text-[11px] xl:text-xs font-bold transition-all duration-200 flex items-center gap-1 xl:gap-1.5 cursor-pointer whitespace-nowrap ${
+                    currentTab === 'admin'
+                      ? 'text-amber-300 bg-amber-500/20 border border-amber-500/70 shadow-[0_0_12px_rgba(245,158,11,0.35)]'
+                      : 'text-amber-400/80 hover:text-amber-300 hover:bg-amber-500/10 border border-transparent'
+                  }`}
+                >
+                  <Lock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span>ADMIN</span>
+                </button>
+              )}
+            </div>
+          </nav>
+
+          {/* ================= COLUMN 3 (RIGHT): STATUS, TIMER, SOUND, SIGN IN & MOBILE HAMBURGER ================= */}
+          <div className="flex items-center justify-end gap-1.5 sm:gap-2 shrink-0">
+            {/* Live Competition Countdown Timer */}
+            {showCompetitionTimer && (
+              <div
+                className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl bg-[#050e18]/90 border text-xs font-mono shadow-inner transition-colors shrink-0 ${
+                  competitionState.status === 'running'
+                    ? 'border-[#00ff41]/40 text-[#00ff41] shadow-[0_0_8px_rgba(0,255,65,0.15)]'
+                    : competitionState.status === 'paused'
+                    ? 'border-amber-500/50 bg-amber-950/20 text-amber-400'
+                    : 'border-red-500/50 bg-red-950/20 text-red-400'
+                }`}
+              >
+                <Clock
+                  className={`w-3.5 h-3.5 shrink-0 ${
+                    competitionState.status === 'running'
+                      ? 'text-[#00ff41] animate-pulse drop-shadow-[0_0_6px_#00ff41]'
+                      : competitionState.status === 'paused'
+                      ? 'text-amber-400'
+                      : 'text-red-400'
+                  }`}
+                />
+                <span className="hidden 2xl:inline text-slate-400 text-[10px] uppercase font-bold">
+                  {competitionState.status === 'running'
+                    ? 'TIME:'
+                    : competitionState.status === 'paused'
+                    ? 'PAUSED:'
+                    : 'ENDED:'}
+                </span>
+                <span className="font-bold tracking-wider tabular-nums text-xs">
+                  {formatTime(competitionState.remainingSeconds)}
+                </span>
               </div>
             )}
-          </div>
 
-          {/* Right Action Bar */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* Audio Toggle */}
+            {/* Strike Meter Indicator (Desktop - if squad is logged in) */}
+            <div className="shrink-0">
+              {renderStrikeIndicator()}
+            </div>
+
+            {/* WS Connected Badge (Desktop) */}
+            <div
+              className={`flex px-2 py-1 sm:py-1.5 rounded-xl text-[10px] font-mono font-bold border items-center gap-1.5 shrink-0 ${
+                isConnected
+                  ? 'bg-[#040c14]/90 text-[#00ff41] border-[#00ff41]/40 shadow-[0_0_8px_rgba(0,255,65,0.15)]'
+                  : 'bg-red-950/40 text-red-400 border-red-500/40'
+              }`}
+              title={isConnected ? 'Real-Time Telemetry & Socket.IO Active' : 'WebSocket Disconnected'}
+            >
+              <span className="relative flex h-2 w-2 shrink-0">
+                {isConnected ? (
+                  <>
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00ff41] opacity-75 duration-1000" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00ff41] shadow-[0_0_8px_#00ff41]" />
+                  </>
+                ) : (
+                  <span className="inline-flex rounded-full h-2 w-2 bg-red-500 shadow-[0_0_8px_#ef4444]" />
+                )}
+              </span>
+              <span className="hidden 2xl:inline opacity-75">WS:</span>
+              <span className="hidden xl:inline">{isConnected ? 'LIVE' : 'OFF'}</span>
+            </div>
+
+            {/* Audio Toggle Button - ALWAYS Visible on Desktop and Mobile */}
             <button
               onClick={toggleSound}
-              className="p-2 sm:p-2.5 rounded-lg bg-[#0d111a] border border-slate-700 hover:border-emerald-500/60 text-slate-300 hover:text-[#00ff66] transition-all hover:shadow-[0_0_12px_rgba(0,255,102,0.2)]"
-              title={muted ? 'Unmute Cyber SFX' : 'Mute Cyber SFX'}
-              aria-label="Toggle Sound Effects"
+              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl border font-mono text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                muted
+                  ? 'bg-red-950/30 text-slate-400 border-slate-800 hover:border-red-500/40 hover:text-red-300'
+                  : 'bg-[#050e18]/90 text-[#00ff41] border-[#00ff41]/40 shadow-[0_0_10px_rgba(0,255,65,0.2)] hover:border-[#00ff41]'
+              }`}
+              title={muted ? 'Audio SFX Muted - Click to Unmute' : 'Audio SFX Active - Click to Mute'}
+              aria-label="Toggle sound"
             >
-              {muted ? <VolumeX className="w-4 h-4 text-slate-500" /> : <Volume2 className="w-4 h-4 text-emerald-400 animate-pulse" />}
+              {muted ? (
+                <VolumeX className="w-3.5 h-3.5 text-red-400 shrink-0" />
+              ) : (
+                <Volume2 className="w-3.5 h-3.5 text-[#00ff41] shrink-0 animate-pulse" />
+              )}
+              <span className="text-[10px] hidden 2xl:inline">{muted ? 'OFF' : 'ON'}</span>
             </button>
 
-            {/* Team Status / Auth Trigger */}
+            {/* Team Profile Dropdown OR Sign In / Register Button - ALWAYS Visible */}
             {team ? (
-              <div className="relative">
+              <div className="relative shrink-0">
                 <button
                   onClick={() => setShowTeamMenu(!showTeamMenu)}
-                  className="flex items-center gap-2 sm:gap-2.5 px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-lg bg-[#0d111a] border border-emerald-500/50 hover:border-emerald-400 shadow-[0_0_15px_rgba(0,255,102,0.2)] hover:shadow-[0_0_20px_rgba(0,255,102,0.3)] transition-all"
+                  className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-[#050e18] border border-emerald-500/40 hover:border-emerald-400 transition-all shadow-[0_0_12px_rgba(0,255,65,0.18)] cursor-pointer shrink-0"
                 >
-                  <div className="relative flex items-center justify-center">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#00ff66]" />
-                    <span className="absolute w-4 h-4 rounded-full bg-[#00ff66]/30 animate-ping" />
-                  </div>
-                  <div className="text-left">
-                    <div className="text-xs font-mono font-bold text-white flex items-center gap-1.5">
-                      <span className="max-w-[110px] sm:max-w-[140px] truncate">{team.teamName}</span>
+                  <div className="text-left font-mono">
+                    <div className="text-xs font-bold text-white flex items-center gap-1">
+                      <span className="max-w-[70px] sm:max-w-[100px] xl:max-w-[130px] truncate">{team.teamName}</span>
                       {teamRank && (
-                        <span className="text-[10px] text-black bg-[#00ff66] px-1.5 py-0.2 rounded font-black">
+                        <span className="text-[9px] text-black bg-[#00ff41] px-1 rounded font-black">
                           #{teamRank}
                         </span>
                       )}
                     </div>
-                    <div className="text-[10px] font-mono text-[#00ff66] font-bold flex items-center gap-1">
-                      <Zap className="w-2.5 h-2.5 text-[#00ff66]" />
-                      <span>{team.score} PTS</span>
+                    <div className="text-[10px] text-[#00ff41] font-bold">
+                      {team.score} PTS
                     </div>
                   </div>
-                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 ml-0.5" />
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 ml-0.5 shrink-0" />
                 </button>
 
                 {/* Team Dropdown Menu */}
                 {showTeamMenu && (
-                  <div className="absolute right-0 mt-2 w-72 bg-[#0d111a]/98 border border-emerald-500/50 rounded-xl shadow-[0_10px_35px_rgba(0,0,0,0.9)] p-4 z-50 text-xs font-mono backdrop-blur-xl animate-fadeIn">
+                  <div className="absolute right-0 mt-2 w-64 bg-[#08121d]/98 border border-emerald-500/40 rounded-xl shadow-[0_10px_35px_rgba(0,0,0,0.9)] p-3.5 z-50 text-xs font-mono backdrop-blur-xl animate-fadeIn">
                     <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
                       <div>
-                        <div className="font-bold text-white text-sm">{team.teamName}</div>
-                        <div className="text-[10px] text-emerald-400 font-medium">RANK #{teamRank} · {team.score} PTS</div>
+                        <div className="font-bold text-white text-xs">{team.teamName}</div>
+                        <div className="text-[10px] text-emerald-400">
+                          RANK #{teamRank} · {team.score} PTS
+                        </div>
                       </div>
-                      <div className="text-right">
-                        {getStrikeBadge()}
-                      </div>
+                      <div className="text-right">{renderStrikeIndicator()}</div>
                     </div>
 
-                    <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-1.5">
-                      ACTIVE OPERATORS ({team.members.length}/4):
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">
+                      TEAM MEMBERS ({team.members.length}/4):
                     </div>
-                    <ul className="space-y-1 mb-3 bg-[#080b12] p-2 rounded-lg border border-slate-800/80">
+                    <ul className="space-y-1 mb-3 bg-[#040810] p-2 rounded-lg border border-slate-800">
                       {team.members.map((m, i) => (
                         <li key={i} className="text-slate-300 flex items-center justify-between text-[11px]">
-                          <span className="flex items-center gap-1.5">
-                            <UserCheck className="w-3 h-3 text-[#00ff66]" />
-                            <span className="font-medium">{m}</span>
+                          <span className="flex items-center gap-1.5 truncate">
+                            <UserCheck className="w-3 h-3 text-[#00ff41]" />
+                            <span className="truncate">{m}</span>
                           </span>
                           {i === 0 && (
-                            <span className="text-[9px] text-[#00ff66] bg-[#00ff66]/10 px-1 py-0.2 rounded border border-[#00ff66]/30">
-                              LEAD
+                            <span className="text-[8px] text-[#00ff41] bg-[#00ff41]/10 px-1 rounded font-bold">
+                              LEADER
                             </span>
                           )}
                         </li>
                       ))}
                     </ul>
 
-                    <div className="border-t border-slate-800 pt-2.5 flex items-center justify-between">
-                      <span className="text-[10px] text-slate-500">SESSION AUTHENTICATED</span>
+                    <div className="border-t border-slate-800 pt-2 flex items-center justify-between gap-2">
+                      <button
+                        onClick={() => {
+                          setShowTeamMenu(false);
+                          handleTabClick('profile');
+                        }}
+                        className="px-2 py-1 rounded-lg bg-[#00ff41]/10 hover:bg-[#00ff41]/20 text-[#00ff41] text-[11px] font-bold cursor-pointer"
+                      >
+                        View Profile
+                      </button>
+
                       <button
                         onClick={() => {
                           setShowTeamMenu(false);
                           onLogoutTeam();
                         }}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded bg-red-950/40 text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-500/60 text-[11px] font-bold transition-colors"
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg bg-red-950/40 text-red-300 hover:text-white border border-red-500/30 text-[11px] font-bold cursor-pointer"
                       >
                         <LogOut className="w-3 h-3" />
                         <span>Disconnect</span>
@@ -286,107 +383,181 @@ export const Header: React.FC<HeaderProps> = ({
             ) : (
               <button
                 onClick={onOpenAuthModal}
-                className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg bg-[#00ff66]/10 border border-[#00ff66] text-[#00ff66] hover:bg-[#00ff66] hover:text-black font-mono text-xs font-black tracking-wider transition-all duration-200 shadow-[0_0_15px_rgba(0,255,102,0.3)] hover:shadow-[0_0_25px_rgba(0,255,102,0.6)]"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-xs font-bold uppercase tracking-wider transition-all duration-300 bg-[#00ff41]/15 hover:bg-[#00ff41] text-[#00ff41] hover:text-black border border-[#00ff41] shadow-[0_0_12px_rgba(0,255,65,0.25)] hover:shadow-[0_0_20px_rgba(0,255,65,0.5)] active:scale-95 cursor-pointer shrink-0"
+                title="Sign in or register a new team"
               >
-                <Shield className="w-3.5 h-3.5" />
-                <span>SIGN IN / JOIN TEAM</span>
+                <UserCheck className="w-3.5 h-3.5 shrink-0" />
+                <span>SIGN UP / IN</span>
               </button>
             )}
 
-            {/* Admin Portal Gateway */}
+            {/* Mobile Hamburger Drawer Trigger Button (< lg screens, min 44x44px touch target) */}
             <button
-              onClick={() => handleTabClick('admin')}
-              className={`p-2 sm:p-2.5 rounded-lg border transition-all ${
-                isAdminAuthenticated
-                  ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-[0_0_15px_rgba(245,158,11,0.35)]'
-                  : 'bg-[#0d111a] border-slate-700 hover:border-amber-500/50 text-slate-400 hover:text-amber-400'
-              }`}
-              title={isAdminAuthenticated ? 'Admin Panel Active' : 'Master Admin Portal Login'}
-              aria-label="Admin Portal Access"
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="lg:hidden p-2 sm:p-2.5 min-w-[38px] sm:min-w-[42px] min-h-[38px] sm:min-h-[42px] rounded-xl bg-[#050e18]/90 border border-emerald-500/40 text-slate-300 hover:text-[#00ff41] hover:border-[#00ff41] flex items-center justify-center transition-all cursor-pointer active:scale-95 shadow-[0_0_12px_rgba(0,255,65,0.15)] shrink-0"
+              aria-label="Toggle navigation drawer"
             >
-              <Lock className={`w-4 h-4 ${isAdminAuthenticated ? 'text-amber-400 animate-pulse' : ''}`} />
+              {mobileMenuOpen ? <X className="w-5 h-5 text-[#00ff41]" /> : <Menu className="w-5 h-5 text-[#00ff41]" />}
             </button>
           </div>
         </div>
 
-        {/* Mobile Sub-Telemetry Strip */}
-        <div className="flex lg:hidden items-center justify-between py-2 border-t border-slate-800/80 text-xs font-mono">
-          <div className="flex items-center gap-2 text-slate-400">
-            <Clock className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-            <span className="text-[11px]">COUNTDOWN:</span>
-            <span className="text-emerald-400 font-bold tabular-nums">{formatTime(competitionState.remainingSeconds)}</span>
-          </div>
-          {team && (
-            <div>
-              {getStrikeBadge()}
-            </div>
-          )}
-        </div>
+        {/* ================= MOBILE NAVIGATION DRAWER (< lg screens) ================= */}
+        {mobileMenuOpen && (
+          <div className="lg:hidden border-t border-emerald-500/30 bg-[#050c14]/98 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.95)] px-4 py-5 space-y-4 font-mono text-xs animate-in slide-in-from-top duration-200">
+            {/* Primary Navigation Links with 44px+ Touch Targets */}
+            <div className="space-y-1.5">
+              <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider px-1 pb-1 flex items-center justify-between">
+                <span>NAVIGATION // SELECT SECTOR</span>
+                <span className="text-[#00ff41] text-[9px]">[ROUND 2]</span>
+              </div>
+              {navTabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = currentTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => handleTabClick(tab.id)}
+                    className={`w-full min-h-[46px] px-3.5 py-2.5 rounded-xl font-bold flex items-center justify-between transition-all cursor-pointer ${
+                      isActive
+                        ? 'bg-[#00ff41]/20 text-[#00ff41] border border-[#00ff41] shadow-[0_0_15px_rgba(0,255,65,0.3)]'
+                        : 'bg-[#08111d]/60 text-slate-300 hover:text-white hover:bg-slate-800/60 border border-slate-800/80'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon className={`w-4 h-4 ${isActive ? 'text-[#00ff41]' : 'text-slate-400'}`} />
+                      <span className="text-sm tracking-wide">{tab.label}</span>
+                    </div>
+                    <span className={isActive ? 'text-[#00ff41] font-mono text-xs' : 'text-slate-600'}>
+                      {isActive ? '[ACTIVE]' : '→'}
+                    </span>
+                  </button>
+                );
+              })}
 
-        {/* Quick-Access Navigation Tabs with Active Glow Indicators */}
-        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto py-2.5 border-t border-slate-800/70 no-scrollbar">
-          <button
-            onClick={() => handleTabClick('challenges')}
-            className={`relative px-4 py-1.5 text-xs font-mono font-bold rounded-lg transition-all whitespace-nowrap flex items-center gap-2 ${
-              currentTab === 'challenges'
-                ? 'bg-[#00ff66]/15 text-[#00ff66] border border-[#00ff66]/60 shadow-[0_0_15px_rgba(0,255,102,0.25)]'
-                : 'text-slate-400 hover:text-white border border-transparent hover:border-slate-800 hover:shadow-[0_0_15px_rgba(0,255,102,0.2)]'
-            }`}
-          >
-            <Terminal className="w-3.5 h-3.5 text-[#00ff66]" />
-            <span>CHALLENGES</span>
-            {currentTab === 'challenges' && (
-              <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-[#00ff66] shadow-[0_0_8px_#00ff66]" />
-            )}
-          </button>
-
-          <button
-            onClick={() => handleTabClick('leaderboard')}
-            className={`relative px-4 py-1.5 text-xs font-mono font-bold rounded-lg transition-all whitespace-nowrap flex items-center gap-2 ${
-              currentTab === 'leaderboard'
-                ? 'bg-[#00f0ff]/15 text-[#00f0ff] border border-[#00f0ff]/60 shadow-[0_0_15px_rgba(0,240,255,0.25)]'
-                : 'text-slate-400 hover:text-white border border-transparent hover:border-slate-800 hover:shadow-[0_0_15px_rgba(0,240,255,0.2)]'
-            }`}
-          >
-            <Trophy className="w-3.5 h-3.5 text-[#00f0ff]" />
-            <span>LEADERBOARD</span>
-            {currentTab === 'leaderboard' && (
-              <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-[#00f0ff] shadow-[0_0_8px_#00f0ff]" />
-            )}
-          </button>
-
-          <button
-            onClick={() => handleTabClick('activity')}
-            className={`relative px-4 py-1.5 text-xs font-mono font-bold rounded-lg transition-all whitespace-nowrap flex items-center gap-2 ${
-              currentTab === 'activity'
-                ? 'bg-[#a855f7]/15 text-[#a855f7] border border-[#a855f7]/60 shadow-[0_0_15px_rgba(168,85,247,0.25)]'
-                : 'text-slate-400 hover:text-white border border-transparent hover:border-slate-800 hover:shadow-[0_0_15px_rgba(168,85,247,0.2)]'
-            }`}
-          >
-            <Radio className="w-3.5 h-3.5 text-[#a855f7]" />
-            <span>LIVE FEED</span>
-            {currentTab === 'activity' && (
-              <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-[#a855f7] shadow-[0_0_8px_#a855f7]" />
-            )}
-          </button>
-
-          {isAdminAuthenticated && (
-            <button
-              onClick={() => handleTabClick('admin')}
-              className={`relative px-4 py-1.5 text-xs font-mono font-bold rounded-lg transition-all whitespace-nowrap flex items-center gap-2 ${
-                currentTab === 'admin'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.3)]'
-                  : 'text-amber-400/70 hover:text-amber-300 border border-transparent hover:border-amber-500/40 hover:shadow-[0_0_15px_rgba(245,158,11,0.2)]'
-              }`}
-            >
-              <Lock className="w-3.5 h-3.5 text-amber-400" />
-              <span>COMMAND HQ</span>
-              {currentTab === 'admin' && (
-                <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-amber-400 shadow-[0_0_8px_#f59e0b]" />
+              {isAdminAuthenticated && (
+                <button
+                  onClick={() => handleTabClick('admin')}
+                  className={`w-full min-h-[46px] px-3.5 py-2.5 rounded-xl font-bold flex items-center justify-between transition-all cursor-pointer ${
+                    currentTab === 'admin'
+                      ? 'bg-amber-500/25 text-amber-300 border border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.4)]'
+                      : 'bg-amber-950/20 text-amber-400 hover:text-amber-300 border border-amber-500/30'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Lock className="w-4 h-4 text-amber-400" />
+                    <span className="text-sm tracking-wide">
+                      ADMIN [{adminOperatorName?.toUpperCase() || 'CONTROLLER'}]
+                    </span>
+                  </div>
+                  <span className="text-amber-400">→</span>
+                </button>
               )}
-            </button>
-          )}
-        </div>
+            </div>
+
+            {/* System Telemetry & Quick Action Controls in Mobile Drawer */}
+            <div className="pt-3 border-t border-slate-800/80 space-y-3">
+              <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider px-1">
+                SYSTEM & TELEMETRY CONTROLS
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                {/* Mobile WS Status */}
+                <div
+                  className={`p-2.5 rounded-xl border flex items-center gap-2 ${
+                    isConnected
+                      ? 'bg-[#040c14] text-[#00ff41] border-[#00ff41]/40 shadow-[0_0_10px_rgba(0,255,65,0.15)]'
+                      : 'bg-red-950/40 text-red-400 border-red-500/40'
+                  }`}
+                >
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    {isConnected ? (
+                      <>
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00ff41] opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00ff41]" />
+                      </>
+                    ) : (
+                      <span className="inline-flex rounded-full h-2 w-2 bg-red-500" />
+                    )}
+                  </span>
+                  <span className="text-[11px] font-bold truncate">
+                    {isConnected ? 'WS CONNECTED' : 'OFFLINE'}
+                  </span>
+                </div>
+
+                {/* Mobile Audio SFX Toggle */}
+                <button
+                  onClick={toggleSound}
+                  className="min-h-[44px] p-2.5 rounded-xl bg-[#040c14] border border-slate-800 hover:border-[#00ff41]/40 text-slate-300 hover:text-[#00ff41] flex items-center justify-between text-[11px] font-bold cursor-pointer"
+                >
+                  <div className="flex items-center gap-1.5">
+                    {muted ? <VolumeX className="w-4 h-4 text-slate-500" /> : <Volume2 className="w-4 h-4 text-[#00ff41]" />}
+                    <span>SFX</span>
+                  </div>
+                  <span className={muted ? 'text-slate-500' : 'text-[#00ff41]'}>
+                    {muted ? 'MUTED' : 'ON'}
+                  </span>
+                </button>
+              </div>
+
+              {/* Mobile Strike Indicator */}
+              {team && (
+                <div className="p-2.5 rounded-xl bg-[#040c14] border border-slate-800 flex items-center justify-between">
+                  <span className="text-[11px] text-slate-400 font-bold">STRIKE MONITOR:</span>
+                  <div>{renderStrikeIndicator()}</div>
+                </div>
+              )}
+
+              {/* Mobile Team Account / Login CTA */}
+              {team ? (
+                <div className="p-3 rounded-xl bg-[#08121d] border border-emerald-500/30 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-white font-bold text-xs truncate flex items-center gap-1.5">
+                      <span className="truncate">{team.teamName}</span>
+                      {teamRank && (
+                        <span className="text-[9px] text-black bg-[#00ff41] px-1 rounded font-black">
+                          #{teamRank}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-[#00ff41] font-bold mt-0.5">
+                      {team.score} PTS · {team.members.length} MEMBERS
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => handleTabClick('profile')}
+                      className="px-2.5 py-1.5 rounded-lg bg-[#00ff41]/10 text-[#00ff41] text-[11px] font-bold hover:bg-[#00ff41]/20 cursor-pointer min-h-[38px]"
+                    >
+                      Profile
+                    </button>
+                    <button
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        onLogoutTeam();
+                      }}
+                      className="p-2 rounded-lg bg-red-950/40 text-red-400 hover:text-white border border-red-500/30 min-h-[38px] flex items-center justify-center cursor-pointer"
+                      title="Disconnect Team"
+                    >
+                      <LogOut className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    onOpenAuthModal();
+                  }}
+                  className="w-full min-h-[46px] py-3 rounded-xl bg-[#00ff41] hover:bg-[#00ff41]/90 text-black font-mono text-xs font-black tracking-wider uppercase transition-all shadow-[0_0_20px_rgba(0,255,65,0.4)] flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                >
+                  <UserCheck className="w-4 h-4 text-black" />
+                  <span>SIGN IN / REGISTER TEAM</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </header>
   );

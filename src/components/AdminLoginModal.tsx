@@ -5,7 +5,7 @@ import { playCyberBlip, playSuccessChime, playErrorBuzz } from '../utils/audio.t
 interface AdminLoginModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (token: string) => void;
+  onSuccess: (token: string, adminName?: string) => void;
 }
 
 export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
@@ -35,8 +35,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
       const data = await res.json();
       if (res.ok && data.token) {
         playSuccessChime();
-        localStorage.setItem('ctf_admin_token', data.token);
-        onSuccess(data.token);
+        onSuccess(data.token, data.adminName || 'Rabum Alal');
         onClose();
       } else {
         playErrorBuzz();
@@ -51,11 +50,12 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
-      <div className="bg-[#0f1422] border-2 border-amber-500/60 shadow-[0_0_35px_rgba(245,158,11,0.25)] rounded-xl p-6 max-w-sm w-full font-mono text-xs relative">
+    <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
+      <div className="bg-[#0f1422]/95 border border-amber-500/70 shadow-[0_0_40px_rgba(245,158,11,0.3)] rounded-2xl p-6 sm:p-7 max-w-sm w-full font-mono text-xs relative my-auto max-h-[90dvh] overflow-y-auto backdrop-blur-xl">
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-amber-400 to-transparent opacity-80" />
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-white p-1"
+          className="absolute top-4 right-4 text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer min-w-[36px] min-h-[36px] flex items-center justify-center"
           aria-label="Close"
         >
           <X className="w-4 h-4" />
@@ -92,7 +92,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter master admin key..."
-                className="w-full bg-[#080b12] border border-slate-700 focus:border-amber-400 rounded pl-8 pr-3 py-2 text-white outline-none"
+                className="w-full min-h-[44px] bg-[#080b12] border border-slate-700 focus:border-amber-400 rounded-xl pl-9 pr-3 py-2.5 text-white outline-none"
               />
             </div>
             <div className="mt-1.5 text-[10px] text-slate-500">
@@ -103,7 +103,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(245,158,11,0.3)] transition-all"
+            className="w-full min-h-[44px] py-3 bg-amber-500 hover:bg-amber-400 text-black font-mono font-bold tracking-wider uppercase rounded-xl flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(245,158,11,0.35)] hover:shadow-[0_0_25px_rgba(245,158,11,0.6)] transition-all disabled:opacity-50 cursor-pointer active:scale-98"
           >
             <Key className="w-3.5 h-3.5" />
             <span>{isLoading ? 'VERIFYING CREDENTIALS...' : 'AUTHENTICATE AS ADMIN'}</span>

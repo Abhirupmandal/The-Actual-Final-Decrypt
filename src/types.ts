@@ -63,6 +63,7 @@ export interface SolveRecord {
 export interface Team {
   id: string;
   teamName: string;
+  email?: string;
   passwordHash?: string;
   passwordSalt?: string;
   members: string[];
@@ -74,18 +75,30 @@ export interface Team {
   lastSolveTime: number;
   registeredAt: number;
   ip: string;
-  strikes: number; // 5-strike disqualification rule
+  strikes: number; // 10-strike disqualification rule
   isDisqualified: boolean;
   disqualifiedReason?: string;
   disqualifiedAt?: number;
   isFlaggedAnomaly: boolean;
   anomalyReason?: string;
+  hasStarted?: boolean;
+  startedAt?: number;
 }
 
 export interface ActivityFeedEvent {
   id: string;
   timestamp: number;
-  type: 'solve' | 'first_blood' | 'hint_unlocked' | 'announcement' | 'system';
+  type:
+    | 'solve'
+    | 'first_blood'
+    | 'failed_submission'
+    | 'hint_unlocked'
+    | 'user_login'
+    | 'user_signup'
+    | 'ready_started'
+    | 'artifact_view'
+    | 'announcement'
+    | 'system';
   teamName: string;
   challengeTitle?: string;
   points?: number;
@@ -108,9 +121,24 @@ export interface SecurityLog {
     | 'FILE_SECURITY_VIOLATION'
     | 'TAMPERED_TOKEN'
     | 'BRUTE_FORCE_LOCKOUT'
+    | 'COMPETITION_STARTED'
+    | 'ADMIN_PROBE_BLOCKED'
+    | 'SCREENSHOT_ATTEMPT'
     | 'SYSTEM_ERROR';
   details: string;
   severity: 'low' | 'medium' | 'high';
+}
+
+export interface ScreenshotAlert {
+  id: string;
+  teamId: string;
+  teamName: string;
+  email?: string;
+  members?: string[];
+  ip: string;
+  timestamp: number;
+  triggerKey?: string;
+  details: string;
 }
 
 export interface CompetitionState {
@@ -119,6 +147,7 @@ export interface CompetitionState {
   durationSeconds: number;
   remainingSeconds: number;
   writeupMode: boolean;
+  matrixRainSpeed?: number;
   announcement: {
     id: string;
     title: string;
@@ -170,3 +199,72 @@ export interface LeaderboardEntry {
   isDisqualified: boolean;
   isFlaggedAnomaly: boolean;
 }
+
+export interface SubmissionRecord {
+  id: string;
+  teamId: string;
+  teamName: string;
+  challengeId: string;
+  challengeTitle?: string;
+  submittedFlag: string;
+  isCorrect: boolean;
+  pointsAwarded: number;
+  timestamp: number;
+  ip: string;
+}
+
+export type AuditActorType = 'STUDENT' | 'ADMIN' | 'SYSTEM';
+
+export type AuditActionType =
+  | 'REGISTRATION'
+  | 'LOGIN'
+  | 'READY_TO_START'
+  | 'TAB_BLUR_WARNING'
+  | 'STRIKE_INCREMENT'
+  | 'DISQUALIFICATION'
+  | 'REINSTATE_TEAM'
+  | 'FLAG_SUBMISSION'
+  | 'HINT_UNLOCK'
+  | 'ADMIN_TIMER_START'
+  | 'ADMIN_TIMER_PAUSE'
+  | 'ADMIN_TIMER_RESUME'
+  | 'ADMIN_TIMER_RESTART'
+  | 'ADMIN_TIMER_SET'
+  | 'ADMIN_DISQUALIFY_TEAM'
+  | 'ADMIN_CLEAR_STRIKES'
+  | 'ADMIN_SCORE_ADJUST'
+  | 'ADMIN_CHALLENGE_CREATE'
+  | 'ADMIN_CHALLENGE_UPDATE'
+  | 'ADMIN_CHALLENGE_DELETE'
+  | 'BROADCAST_SENT'
+  | 'SCREENSHOT_INTERCEPTED'
+  | 'ARTIFACT_INSPECTED'
+  | 'DEVTOOLS_VIOLATION'
+  | 'RATE_LIMIT_HIT'
+  | 'FEEDBACK_SUBMITTED';
+
+export interface AuditLog {
+  logId: string;
+  actorType: AuditActorType;
+  actorIdentifier: string;
+  actionType: AuditActionType;
+  details: string; // Detailed JSON string with metadata
+  ipAddress: string;
+  timestamp: string; // Exact UTC ISO Datetime string e.g. "2026-10-10T12:34:56.789Z"
+  timestampMs: number;
+}
+
+export interface FeedbackSubmission {
+  id: string;
+  teamId: string;
+  teamName: string;
+  ratingUi: number; // 1-5
+  challengeDifficulty: string; // 'too_easy' | 'balanced' | 'challenging' | 'too_hard'
+  platformStability: number; // 1-5
+  fairPlaySecurity: string; // 'seamless' | 'balanced' | 'strict' | 'needs_tuning'
+  clarityRulesHints: number; // 1-5
+  favoriteHighlight: string;
+  suggestionsRound3: string;
+  submittedAt: number;
+}
+

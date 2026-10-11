@@ -20,17 +20,20 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: (team: any, token: string) => void;
+  onAdminSuccess?: (token: string, adminName?: string) => void;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
+  onAdminSuccess,
 }) => {
   const [activeTab, setActiveTab] = useState<'signup' | 'login'>('signup');
 
   // Sign Up Form State
   const [signupTeamName, setSignupTeamName] = useState('');
+  const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
   const [members, setMembers] = useState<string[]>(['']);
@@ -96,6 +99,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
+    if (!signupEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signupEmail.trim())) {
+      setError('A valid team email address is required (strictly 1 account per email to avoid cheating).');
+      playErrorBuzz();
+      return;
+    }
+
     if (signupPassword.length < 8) {
       setError('Password must be at least 8 characters long.');
       playErrorBuzz();
@@ -130,6 +139,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           teamName: signupTeamName.trim(),
+          email: signupEmail.trim().toLowerCase(),
           password: signupPassword,
           members: validMembers,
         }),
@@ -186,6 +196,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const data = await res.json();
       if (res.ok && data.success) {
         playSuccessChime();
+        if (data.isAdmin) {
+          if (onAdminSuccess) {
+            onAdminSuccess(data.token, data.adminName);
+          } else {
+            window.location.reload();
+          }
+          onClose();
+          return;
+        }
         localStorage.setItem('ctf_team_token', data.token);
         onSuccess(data.team, data.token);
         onClose();
@@ -202,18 +221,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-4">
-      <div className="bg-[#0d111a] border-2 border-emerald-500/50 shadow-[0_0_35px_rgba(0,255,102,0.2)] rounded-xl p-6 max-w-md w-full font-mono text-xs relative max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
+      <div className="bg-[#0d111a]/95 border border-[#00ff66]/60 shadow-[0_0_45px_rgba(0,255,102,0.25)] rounded-2xl p-6 sm:p-7 max-w-md w-full font-mono text-xs relative my-auto max-h-[90dvh] overflow-y-auto backdrop-blur-xl">
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#00ff66] to-transparent opacity-80" />
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-white p-1"
+          className="absolute top-4 right-4 text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer min-w-[36px] min-h-[36px] flex items-center justify-center"
           aria-label="Close"
         >
           <X className="w-4 h-4" />
         </button>
 
         {/* Tab Toggle: Sign Up vs Login */}
-        <div className="flex items-center gap-1 bg-[#080b12] p-1 rounded-lg border border-slate-800 mb-5">
+        <div className="flex items-center gap-1 bg-[#080b12] p-1 rounded-xl border border-slate-800 mb-5">
           <button
             type="button"
             onClick={() => {
@@ -221,7 +241,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               setActiveTab('signup');
               setError(null);
             }}
-            className={`flex-1 py-2 rounded font-bold text-center transition-colors flex items-center justify-center gap-1.5 ${
+            className={`flex-1 min-h-[44px] py-2 px-2 rounded-lg font-bold text-center transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === 'signup'
                 ? 'bg-[#00ff66] text-black shadow-[0_0_12px_rgba(0,255,102,0.25)]'
                 : 'text-slate-400 hover:text-white'
@@ -238,7 +258,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               setActiveTab('login');
               setError(null);
             }}
-            className={`flex-1 py-2 rounded font-bold text-center transition-colors flex items-center justify-center gap-1.5 ${
+            className={`flex-1 min-h-[44px] py-2 px-2 rounded-lg font-bold text-center transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === 'login'
                 ? 'bg-[#00ff66] text-black shadow-[0_0_12px_rgba(0,255,102,0.25)]'
                 : 'text-slate-400 hover:text-white'
@@ -273,6 +293,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               />
               <span className="text-[10px] text-slate-500 mt-1 block">
                 Unique identifier across the tournament.
+              </span>
+            </div>
+
+            <div>
+              <label className="text-slate-300 font-bold block mb-1">
+                EMAIL ADDRESS <span className="text-[#00ff66]">*</span>
+              </label>
+              <input
+                type="email"
+                required
+                value={signupEmail}
+                onChange={(e) => setSignupEmail(e.target.value)}
+                placeholder="e.g. teamlead@example.com"
+                className="w-full bg-[#080b12] border border-slate-700 focus:border-[#00ff66] rounded px-3 py-2 text-white outline-none"
+              />
+              <span className="text-[10px] text-slate-500 mt-1 block">
+                Official contact email. Strictly 1 team per email to ensure fair play.
               </span>
             </div>
 
@@ -359,7 +396,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       required={idx === 0}
                       value={member}
                       onChange={(e) => handleMemberChange(idx, e.target.value)}
-                      placeholder={idx === 0 ? 'Member 1 (Team Lead) *' : `Member ${idx + 1}`}
+                      placeholder={idx === 0 ? 'Member 1 (Team Leader) *' : `Member ${idx + 1}`}
                       className="flex-1 bg-[#080b12] border border-slate-700 focus:border-[#00ff66] rounded px-3 py-1.5 text-white outline-none"
                     />
                     {members.length > 1 && (
@@ -381,10 +418,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-2.5 bg-[#00ff66] hover:bg-[#00ff66]/90 text-[#07090e] font-bold rounded flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(0,255,102,0.3)] transition-all"
+                className="w-full min-h-[46px] py-3 bg-[#00ff66] hover:bg-[#00ff66]/85 text-black font-mono font-bold tracking-wider uppercase rounded-xl flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(0,255,102,0.4)] hover:shadow-[0_0_25px_rgba(0,255,102,0.7)] transition-all disabled:opacity-50 cursor-pointer active:scale-98"
               >
                 <Key className="w-3.5 h-3.5" />
-                <span>{isLoading ? 'CREATING TEAM...' : 'REGISTER & JOIN COMPETITION'}</span>
+                <span>{isLoading ? 'CREATING TEAM...' : 'REGISTER TEAM & JOIN'}</span>
               </button>
             </div>
           </form>
@@ -395,21 +432,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             <div>
               <label className="text-slate-300 font-bold block mb-1">
-                REGISTERED TEAM NAME <span className="text-[#00ff66]">*</span>
+                TEAM NAME OR EMAIL <span className="text-[#00ff66]">*</span>
               </label>
               <input
                 type="text"
                 required
                 value={loginTeamName}
                 onChange={(e) => setLoginTeamName(e.target.value)}
-                placeholder="Enter team name"
-                className="w-full bg-[#080b12] border border-slate-700 focus:border-[#00ff66] rounded px-3 py-2 text-white outline-none"
+                placeholder="Enter team name or email"
+                className="w-full min-h-[44px] bg-[#080b12] border border-slate-700 focus:border-[#00ff66] rounded-xl px-3 py-2.5 text-white outline-none"
               />
             </div>
 
             <div>
               <label className="text-slate-300 font-bold block mb-1">
-                TEAM PASSWORD <span className="text-[#00ff66]">*</span>
+                PASSWORD <span className="text-[#00ff66]">*</span>
               </label>
               <div className="relative">
                 <input
@@ -418,12 +455,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   value={loginPassword}
                   onChange={(e) => setLoginPassword(e.target.value)}
                   placeholder="Enter team password"
-                  className="w-full bg-[#080b12] border border-slate-700 focus:border-[#00ff66] rounded pl-3 pr-9 py-2 text-white outline-none"
+                  className="w-full min-h-[44px] bg-[#080b12] border border-slate-700 focus:border-[#00ff66] rounded-xl pl-3 pr-10 py-2.5 text-white outline-none"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-1"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-2 min-w-[36px] min-h-[36px] flex items-center justify-center cursor-pointer"
                 >
                   {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
@@ -434,7 +471,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-2.5 bg-[#00ff66] hover:bg-[#00ff66]/90 text-[#07090e] font-bold rounded flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(0,255,102,0.3)] transition-all"
+                className="w-full min-h-[46px] py-3 bg-[#00ff66] hover:bg-[#00ff66]/85 text-black font-mono font-bold tracking-wider uppercase rounded-xl flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(0,255,102,0.4)] hover:shadow-[0_0_25px_rgba(0,255,102,0.7)] transition-all disabled:opacity-50 cursor-pointer active:scale-98"
               >
                 <LogIn className="w-3.5 h-3.5" />
                 <span>{isLoading ? 'VERIFYING CREDENTIALS...' : 'SIGN IN TO TEAM'}</span>
@@ -447,9 +484,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         <div className="mt-5 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-500">
           <div className="flex items-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>HMAC-SHA256 Token Auth</span>
+            <span>Secure &amp; Encrypted Sign-In</span>
           </div>
-          <span>Rate Limit Protected</span>
+          <span>Fair Play &amp; Abuse Protected</span>
         </div>
       </div>
     </div>

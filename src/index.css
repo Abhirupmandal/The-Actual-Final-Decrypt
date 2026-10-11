@@ -10,6 +10,10 @@
     --neon-red: #ff3366;
     --neon-amber: #f59e0b;
     --neon-purple: #a855f7;
+    --neon-sky: #38bdf8;
+    --neon-rose: #f43f5e;
+    --neon-teal: #14b8a6;
+    --neon-orange: #f97316;
     --text-main: #e2e8f0;
     --text-muted: #94a3b8;
   }
@@ -19,7 +23,7 @@
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
-    font-family: 'Space Grotesk', system-ui, sans-serif;
+    font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif;
     background-color: #07090e;
     color: #e2e8f0;
     overflow-x: hidden;
@@ -28,11 +32,11 @@
   input, textarea {
     user-select: text !important;
     -webkit-user-select: text !important;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'Share Tech Mono', 'JetBrains Mono', monospace;
   }
 
   code, pre, .font-mono {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'Share Tech Mono', 'JetBrains Mono', monospace;
   }
 
   .font-chakra {
@@ -40,25 +44,89 @@
   }
 }
 
+/* Category Badge Pills Glows */
+.cat-badge-crypto {
+  color: #00f0ff;
+  border-color: rgba(0, 240, 255, 0.6);
+  background-color: rgba(0, 240, 255, 0.1);
+  box-shadow: 0 0 12px rgba(0, 240, 255, 0.35);
+}
+
+.cat-badge-stego {
+  color: #00ff66;
+  border-color: rgba(0, 255, 102, 0.6);
+  background-color: rgba(0, 255, 102, 0.1);
+  box-shadow: 0 0 12px rgba(0, 255, 102, 0.35);
+}
+
+.cat-badge-forensics {
+  color: #c084fc;
+  border-color: rgba(168, 85, 247, 0.6);
+  background-color: rgba(168, 85, 247, 0.12);
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.35);
+}
+
+.cat-badge-web {
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.6);
+  background-color: rgba(56, 189, 248, 0.1);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+}
+
+.cat-badge-rev {
+  color: #fb7185;
+  border-color: rgba(244, 63, 94, 0.6);
+  background-color: rgba(244, 63, 94, 0.12);
+  box-shadow: 0 0 12px rgba(244, 63, 94, 0.35);
+}
+
+.cat-badge-osint {
+  color: #2dd4bf;
+  border-color: rgba(20, 184, 166, 0.6);
+  background-color: rgba(20, 184, 166, 0.1);
+  box-shadow: 0 0 12px rgba(20, 184, 166, 0.35);
+}
+
+.cat-badge-audio {
+  color: #fb923c;
+  border-color: rgba(249, 115, 22, 0.6);
+  background-color: rgba(249, 115, 22, 0.12);
+  box-shadow: 0 0 12px rgba(249, 115, 22, 0.35);
+}
+
+.cat-badge-misc {
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.6);
+  background-color: rgba(245, 158, 11, 0.1);
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.35);
+}
+
 /* Cyberpunk Glows & Utility Classes */
 .glow-neon-green {
-  box-shadow: 0 0 15px rgba(0, 255, 102, 0.35), inset 0 0 10px rgba(0, 255, 102, 0.08);
+  box-shadow: 0 0 15px rgba(0, 255, 102, 0.4), inset 0 0 10px rgba(0, 255, 102, 0.08);
 }
 
 .glow-neon-cyan {
-  box-shadow: 0 0 15px rgba(0, 240, 255, 0.35), inset 0 0 10px rgba(0, 240, 255, 0.08);
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.4), inset 0 0 10px rgba(0, 240, 255, 0.08);
 }
 
 .glow-neon-red {
-  box-shadow: 0 0 20px rgba(255, 51, 102, 0.45), inset 0 0 15px rgba(255, 51, 102, 0.1);
+  box-shadow: 0 0 25px rgba(255, 51, 102, 0.5), inset 0 0 15px rgba(255, 51, 102, 0.1);
 }
 
 .glow-neon-amber {
-  box-shadow: 0 0 15px rgba(245, 158, 11, 0.35), inset 0 0 10px rgba(245, 158, 11, 0.08);
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.4), inset 0 0 10px rgba(245, 158, 11, 0.08);
 }
 
 .glow-neon-purple {
-  box-shadow: 0 0 15px rgba(168, 85, 247, 0.35), inset 0 0 10px rgba(168, 85, 247, 0.08);
+  box-shadow: 0 0 15px rgba(168, 85, 247, 0.4), inset 0 0 10px rgba(168, 85, 247, 0.08);
+}
+
+.terminal-tab-hover {
+  transition: all 0.2s ease-in-out;
+}
+.terminal-tab-hover:hover {
+  box-shadow: 0 0 15px rgba(0, 255, 102, 0.4);
 }
 
 .terminal-border-green {
@@ -87,6 +155,19 @@
   background-size: 100% 3px, 6px 100%;
 }
 
+.scanline-red {
+  background: linear-gradient(
+    rgba(239, 68, 68, 0.05) 50%, 
+    rgba(0, 0, 0, 0.6) 50%
+  ), linear-gradient(
+    90deg,
+    rgba(255, 0, 0, 0.08),
+    rgba(0, 0, 0, 0.02),
+    rgba(255, 0, 0, 0.08)
+  );
+  background-size: 100% 4px, 8px 100%;
+}
+
 .crt-grid-bg {
   background-size: 30px 30px;
   background-image: 
@@ -100,25 +181,38 @@
     filter: drop-shadow(0 0 8px rgba(0, 255, 102, 0.6));
   }
   50% {
-    filter: drop-shadow(0 0 18px rgba(0, 255, 102, 0.9));
+    filter: drop-shadow(0 0 20px rgba(0, 255, 102, 0.95));
   }
 }
 
 .animate-neon-pulse {
-  animation: neonPulse 3s ease-in-out infinite;
+  animation: neonPulse 2.8s ease-in-out infinite;
 }
 
 @keyframes glitchFlicker {
-  0%, 100% { opacity: 1; }
-  92% { opacity: 1; }
-  93% { opacity: 0.6; }
-  94% { opacity: 1; }
-  97% { opacity: 0.8; }
-  98% { opacity: 1; }
+  0%, 100% { opacity: 1; transform: translate(0); }
+  92% { opacity: 1; transform: translate(0); }
+  93% { opacity: 0.6; transform: translate(-1px, 1px); }
+  94% { opacity: 1; transform: translate(1px, -1px); }
+  97% { opacity: 0.8; transform: translate(0); }
+  98% { opacity: 1; transform: translate(0); }
 }
 
 .animate-glitch {
-  animation: glitchFlicker 6s infinite;
+  animation: glitchFlicker 5s infinite;
+}
+
+@keyframes pulseGlowRed {
+  0%, 100% {
+    box-shadow: 0 0 25px rgba(239, 68, 68, 0.4), inset 0 0 15px rgba(239, 68, 68, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 45px rgba(239, 68, 68, 0.7), inset 0 0 25px rgba(239, 68, 68, 0.2);
+  }
+}
+
+.animate-alarm-red {
+  animation: pulseGlowRed 1.8s ease-in-out infinite;
 }
 
 /* Custom Cyber Scrollbars */
@@ -151,3 +245,103 @@
     rgba(0, 255, 102, 0.015) 280px
   );
 }
+
+/* DRM & Content Protection CSS Screen Shielding */
+.drm-screen-shield,
+.challenge-container-shield,
+.protected-challenge-card {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  -webkit-touch-callout: none !important;
+  -webkit-user-drag: none !important;
+}
+
+/* Global text selection shielding: challenge text cannot be highlighted */
+::selection {
+  background: transparent !important;
+  color: inherit !important;
+}
+::-moz-selection {
+  background: transparent !important;
+  color: inherit !important;
+}
+input::selection, textarea::selection {
+  background: rgba(0, 255, 102, 0.3) !important;
+  color: #ffffff !important;
+}
+
+/* Print Screen / PDF Export Shield: Blocks printing challenge content completely */
+@media print {
+  html, body {
+    display: none !important;
+    visibility: hidden !important;
+    background: #000000 !important;
+  }
+}
+
+/* Anti-Screenshot Instant Blackout & Blanking Shield */
+html.drm-blackout-active,
+body.drm-blackout-active {
+  background: #000000 !important;
+  background-color: #000000 !important;
+  color: #000000 !important;
+}
+
+/* Pitch-black full-screen shield rendered directly onto root DOM */
+html.drm-blackout-active::before,
+body.drm-blackout-active::before {
+  content: "" !important;
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: #000000 !important;
+  background-color: #000000 !important;
+  z-index: 2147483647 !important;
+  pointer-events: none !important;
+  display: block !important;
+}
+
+/* Completely blank out root DOM so zero elements or text are visible during blackout */
+html.drm-blackout-active #root,
+html.drm-blackout-active #root * {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  filter: brightness(0) blur(50px) !important;
+}
+
+html.drm-blackout-active main,
+html.drm-blackout-active .drm-screen-shield,
+html.drm-blackout-active .challenge-container-shield,
+html.drm-blackout-active .protected-challenge-card {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  filter: blur(100px) !important;
+}
+
+/* Blackout overlay elements - only styled when active */
+html.drm-blackout-active #drm-global-blackout-curtain,
+html.drm-blackout-active #screenshot-blackout-shield,
+html.drm-blackout-active .drm-blackout-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background-color: #000000 !important;
+  background: #000000 !important;
+  z-index: 2147483647 !important;
+  pointer-events: none !important;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+
+

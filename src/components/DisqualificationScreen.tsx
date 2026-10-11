@@ -31,37 +31,37 @@ export const DisqualificationScreen: React.FC<DisqualificationScreenProps> = ({
         <div>
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-red-950/90 border border-red-500 text-xs font-black uppercase tracking-widest text-red-400 mb-2 shadow-[0_0_15px_rgba(239,68,68,0.4)]">
             <AlertOctagon className="w-4 h-4 text-red-500 animate-bounce" />
-            <span>5-STRIKE ELIMINATION PROTOCOL TRIGGERED</span>
+            <span>MAXIMUM WARNING LIMIT REACHED</span>
           </div>
           <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-white drop-shadow-[0_0_20px_rgba(255,0,0,0.8)]">
             [DISQUALIFIED]
           </h1>
           <p className="text-red-400 font-bold text-sm tracking-widest uppercase mt-1">
-            PERMANENT TERMINATION OF SESSION CREDENTIALS
+            YOUR TEAM HAS BEEN DISQUALIFIED
           </p>
         </div>
 
         <div className="bg-[#180404] border border-red-900/80 rounded-xl p-5 text-left text-xs space-y-2.5 shadow-inner">
           <div className="flex justify-between border-b border-red-900/50 pb-2">
-            <span className="text-slate-400">TEAM IDENTITY:</span>
+            <span className="text-slate-400">TEAM NAME:</span>
             <span className="text-white font-bold text-sm">[{teamName}]</span>
           </div>
           <div className="flex justify-between border-b border-red-900/50 pb-2">
-            <span className="text-slate-400">TOTAL STRIKES ACCUMULATED:</span>
-            <span className="text-red-400 font-bold">5 / 5 (CEILING REACHED)</span>
+            <span className="text-slate-400">WARNINGS:</span>
+            <span className="text-red-400 font-bold">10 / 10 (LIMIT REACHED)</span>
           </div>
           <div className="flex justify-between border-b border-red-900/50 pb-2">
-            <span className="text-slate-400">PRIMARY REASON:</span>
+            <span className="text-slate-400">REASON:</span>
             <span className="text-amber-400 font-bold break-all">{reason}</span>
           </div>
           <div className="flex justify-between pt-1">
-            <span className="text-slate-400">ARBITRATION RECORD:</span>
-            <span className="text-red-500 font-black">LOGGED IMMUTABLY TO AUDIT TRAIL</span>
+            <span className="text-slate-400">STATUS:</span>
+            <span className="text-red-500 font-black">RECORDED BY EVENT COORDINATORS</span>
           </div>
         </div>
 
         <p className="text-xs text-slate-400 leading-relaxed font-sans max-w-md mx-auto">
-          This session accumulated five confirmed security infractions (focus loss, unauthorized keystroke interception, or DevTools inspection attempts). Your JWT has been invalidated across the cluster.
+          Your team has reached the maximum warning threshold or attempted to inspect webpage code. If you have questions regarding this decision, please speak with an event coordinator.
         </p>
 
         <div className="pt-2">
@@ -70,7 +70,7 @@ export const DisqualificationScreen: React.FC<DisqualificationScreenProps> = ({
             className="w-full py-4 bg-red-600 hover:bg-red-500 text-white font-mono font-black tracking-widest text-xs uppercase rounded-xl flex items-center justify-center gap-2 shadow-[0_0_30px_rgba(255,0,0,0.6)] hover:shadow-[0_0_45px_rgba(255,0,0,0.85)] transition-all active:scale-98"
           >
             <LogOut className="w-4 h-4" />
-            <span>EXIT COMPETITION PLATFORM</span>
+            <span>EXIT PLATFORM</span>
           </button>
         </div>
       </div>
