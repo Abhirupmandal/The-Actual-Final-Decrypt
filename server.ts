@@ -451,13 +451,13 @@ function getPublicChallengesForTeam(team?: Team): PublicChallengeView[] {
 // Seed & Load Challenges from SQLite persistent database
 function loadInitialQuestions() {
   try {
-    challengeStore.seedFromQuestionsJsonIfEmpty(path.join(__dirname, 'questions.json'));
+    challengeStore.syncFromQuestionsJson(path.join(__dirname, 'questions.json'));
     challenges = challengeStore.getAll();
     challengeMap.clear();
     for (const chal of challenges) {
       challengeMap.set(chal.id, chal);
     }
-    console.log(`[SQLite Database] Successfully loaded & indexed ${challenges.length} challenges from SQLite database`);
+    console.log(`[SQLite Database] Successfully synchronized & indexed ${challenges.length} challenges from questions.json`);
   } catch (err) {
     console.error('[SQLite Database] Failed to load challenges from SQLite store:', err);
   }

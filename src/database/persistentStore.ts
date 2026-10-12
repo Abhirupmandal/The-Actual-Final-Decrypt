@@ -594,9 +594,7 @@ class SqliteChallengeStore {
           if (!syncedIds.has(id)) {
             this.challenges.delete(id);
             try {
-              const delStmt = this.db.prepare('DELETE FROM challenges WHERE id = ?;');
-              delStmt.run([id]);
-              delStmt.free();
+              this.db.run('DELETE FROM challenges WHERE id = ?;', [id]);
             } catch (delErr) {
               console.warn('[SQLite Database] Failed to delete obsolete challenge:', id, delErr);
             }
