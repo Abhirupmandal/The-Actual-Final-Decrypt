@@ -232,9 +232,23 @@ class SqliteTeamStore {
   }
 
   /**
-   * Safe disk synchronization with Windows-compatible write and fallback
+   * Debounced disk synchronization: Batches rapid writes to prevent I/O blocking
+   * under high concurrency (1,000+ concurrent students submitting flags/unlocks).
    */
   private syncToDisk(): void {
+    if (this.syncTimeout) {
+      clearTimeout(this.syncTimeout);
+    }
+    this.syncTimeout = setTimeout(() => {
+      this.flushToDisk();
+      this.syncTimeout = null;
+    }, 500);
+  }
+
+  /**
+   * Safe disk synchronization with Windows-compatible write and fallback
+   */
+  public flushToDisk(): void {
     try {
       // 1. Export binary SQLite database (.sqlite)
       const binaryData = this.db.export();
@@ -911,6 +925,23 @@ class SqliteActivityFeedStore {
     } catch (err) {
       console.error('[SQLite ActivityFeedStore] Error loading activity feed:', err);
       return [];
+    }
+  }
+
+  public purgeResidualDummyEvents(): void {
+    try {
+      this.db.run(`
+        DELETE FROM activity_feed 
+        WHERE challenge_title LIKE '%Phantom Pixel%'
+           OR challenge_title LIKE '%Memory Dump%'
+           OR challenge_title LIKE '%Subcarrier Spectrogram%'
+           OR message LIKE '%Phantom Pixel%'
+           OR message LIKE '%Memory Dump%'
+           OR message LIKE '%Subcarrier Spectrogram%';
+      `);
+      this.syncFn();
+    } catch (err) {
+      console.error('[SQLite ActivityFeedStore] Error purging residual dummy activity events:', err);
     }
   }
 

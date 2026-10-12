@@ -458,6 +458,16 @@ function loadInitialQuestions() {
       challengeMap.set(chal.id, chal);
     }
     console.log(`[SQLite Database] Successfully synchronized & indexed ${challenges.length} challenges from questions.json`);
+
+    // Purge any old dummy events referencing placeholder challenges from disk
+    activityFeedStore.purgeResidualDummyEvents();
+    activityFeed = activityFeedStore.getRecent(100).filter(
+      (ev) =>
+        !ev.challengeTitle?.includes('Phantom') &&
+        !ev.challengeTitle?.includes('Memory Dump') &&
+        !ev.challengeTitle?.includes('Subcarrier') &&
+        !ev.message?.includes('Phantom Pixel')
+    );
   } catch (err) {
     console.error('[SQLite Database] Failed to load challenges from SQLite store:', err);
   }
@@ -469,41 +479,41 @@ function seedDemoTeams() {
     {
       teamName: '0xDeadBeef',
       members: ['Alice (Lead)', 'Bob', 'CipherX'],
-      score: 470,
-      solves: ['chal-01', 'chal-03', 'chal-05'],
-      firstBloods: ['chal-01'],
+      score: 350,
+      solves: ['chal-r2-02', 'chal-r2-03', 'chal-r2-04'],
+      firstBloods: ['chal-r2-02'],
       totalFailedAttempts: 1,
     },
     {
       teamName: 'NullPointerCrew',
       members: ['RootKit', 'ZeroDay', 'Neo'],
-      score: 320,
-      solves: ['chal-02', 'chal-03'],
-      firstBloods: ['chal-02'],
+      score: 250,
+      solves: ['chal-r2-03', 'chal-r2-05'],
+      firstBloods: ['chal-r2-03'],
       totalFailedAttempts: 3,
     },
     {
       teamName: 'BinaryShadows',
       members: ['Ghost', 'Spectre'],
-      score: 270,
-      solves: ['chal-01', 'chal-03'],
+      score: 200,
+      solves: ['chal-r2-02', 'chal-r2-04'],
       firstBloods: [],
       totalFailedAttempts: 2,
     },
     {
       teamName: 'ViperSec',
       members: ['Viper', 'Krypton', 'ByteStorm', 'Hex'],
-      score: 180,
-      solves: ['chal-04'],
-      firstBloods: ['chal-04'],
+      score: 150,
+      solves: ['chal-r2-06'],
+      firstBloods: ['chal-r2-06'],
       totalFailedAttempts: 4,
     },
     {
       teamName: 'CyberValkyrie',
       members: ['Freya', 'Sigrun'],
-      score: 120,
-      solves: ['chal-03'],
-      firstBloods: ['chal-03'],
+      score: 100,
+      solves: ['chal-r2-04'],
+      firstBloods: ['chal-r2-04'],
       totalFailedAttempts: 0,
     },
   ];
@@ -556,36 +566,36 @@ function seedDemoTeams() {
       timestamp: Date.now() - 600000,
       type: 'first_blood',
       teamName: '0xDeadBeef',
-      challengeTitle: 'Phantom Pixel Spectra',
-      points: 200,
-      message: 'Claimed [FIRST BLOOD] on Phantom Pixel Spectra (+200 pts)!',
+      challengeTitle: 'What the Eyes Cannot See',
+      points: 150,
+      message: 'Claimed [FIRST BLOOD] on What the Eyes Cannot See (+150 pts)!',
     },
     {
       id: 'act-2',
       timestamp: Date.now() - 480000,
       type: 'first_blood',
       teamName: 'NullPointerCrew',
-      challengeTitle: "Memory Dump: Infiltrator's Footprint",
-      points: 250,
-      message: "Claimed [FIRST BLOOD] on Memory Dump: Infiltrator's Footprint (+250 pts)!",
+      challengeTitle: 'Strings Attached',
+      points: 150,
+      message: 'Claimed [FIRST BLOOD] on Strings Attached (+150 pts)!',
     },
     {
       id: 'act-3',
       timestamp: Date.now() - 320000,
       type: 'solve',
       teamName: 'BinaryShadows',
-      challengeTitle: 'Phantom Pixel Spectra',
-      points: 150,
-      message: 'Decrypted Phantom Pixel Spectra (+150 pts)!',
+      challengeTitle: 'The Careless Admin',
+      points: 100,
+      message: 'Decrypted The Careless Admin (+100 pts)!',
     },
     {
       id: 'act-4',
       timestamp: Date.now() - 150000,
       type: 'first_blood',
       teamName: 'ViperSec',
-      challengeTitle: 'Subcarrier Spectrogram: Sonic Mirage',
-      points: 230,
-      message: 'Claimed [FIRST BLOOD] on Subcarrier Spectrogram: Sonic Mirage (+230 pts)!',
+      challengeTitle: 'Metadata Never Sleeps',
+      points: 150,
+      message: 'Claimed [FIRST BLOOD] on Metadata Never Sleeps (+150 pts)!',
     },
   ];
 }
@@ -1239,6 +1249,10 @@ app.post('/api/auth/admin', (req: Request, res: Response) => {
 
 // Public Sync State with Redis Cache
 app.get('/api/state', async (req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
   const rawToken = req.headers.authorization?.replace('Bearer ', '');
   let team: Team | undefined;
   let tokenExpired = false;
@@ -3041,5 +3055,18 @@ async function startServer() {
     console.log(`[CTF Server] Hardened & Live on http://localhost:${PORT}`);
   });
 }
+
+// Graceful shutdown: flush in-memory SQLite store to persistent disk
+process.on('SIGINT', () => {
+  console.log('[CTF Server] Gracefully shutting down, flushing SQLite database to disk...');
+  teamStore.flushToDisk();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('[CTF Server] Gracefully shutting down, flushing SQLite database to disk...');
+  teamStore.flushToDisk();
+  process.exit(0);
+});
 
 startServer();

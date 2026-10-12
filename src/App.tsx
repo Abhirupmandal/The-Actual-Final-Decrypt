@@ -282,12 +282,14 @@ export default function App() {
 
     s.on('state_init', (data) => {
       if (data.competitionState) setCompetitionState(data.competitionState);
+      if (data.challenges && Array.isArray(data.challenges)) setChallenges(data.challenges);
       if (data.leaderboard) setLeaderboard(data.leaderboard);
       if (data.activityFeed) setActivityFeed(data.activityFeed);
     });
 
     s.on('state_update', (data) => {
       if (data.competitionState) setCompetitionState(data.competitionState);
+      if (data.challenges && Array.isArray(data.challenges)) setChallenges(data.challenges);
       if (data.leaderboard) setLeaderboard(data.leaderboard);
     });
 
