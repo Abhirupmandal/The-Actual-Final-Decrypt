@@ -36,7 +36,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
-  const [members, setMembers] = useState<string[]>(['']);
+  const [members, setMembers] = useState<string[]>(['', '']);
 
   // Login Form State
   const [loginTeamName, setLoginTeamName] = useState('');
@@ -69,14 +69,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const strength = getPasswordStrength(signupPassword);
 
   const handleAddMember = () => {
-    if (members.length < 4) {
+    if (members.length < 3) {
       playCyberBlip(750);
       setMembers([...members, '']);
     }
   };
 
   const handleRemoveMember = (idx: number) => {
-    if (members.length > 1) {
+    if (members.length > 2) {
       playCyberBlip(600);
       setMembers(members.filter((_, i) => i !== idx));
     }
@@ -124,8 +124,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
 
     const validMembers = members.map((m) => m.trim()).filter((m) => m.length > 0);
-    if (validMembers.length === 0) {
-      setError('Team Lead name is required.');
+    if (validMembers.length < 2) {
+      setError('A team must have at least 2 members.');
+      playErrorBuzz();
+      return;
+    }
+    if (validMembers.length > 3) {
+      setError('A team can have a maximum of 3 members.');
       playErrorBuzz();
       return;
     }
@@ -373,10 +378,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-slate-300 font-bold flex items-center gap-1">
                   <Users className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>MEMBERS ({members.length}/4 MAX)</span>
+                  <span>MEMBERS ({members.length}/3 MAX)</span>
                 </label>
 
-                {members.length < 4 && (
+                {members.length < 3 && (
                   <button
                     type="button"
                     onClick={handleAddMember}
@@ -393,13 +398,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <div key={idx} className="flex gap-2">
                     <input
                       type="text"
-                      required={idx === 0}
+                      required={idx < 2}
                       value={member}
                       onChange={(e) => handleMemberChange(idx, e.target.value)}
-                      placeholder={idx === 0 ? 'Member 1 (Team Leader) *' : `Member ${idx + 1}`}
+                      placeholder={idx === 0 ? 'Member 1 (Team Leader) *' : idx === 1 ? 'Member 2 (Required) *' : 'Member 3 (Optional)'}
                       className="flex-1 bg-[#080b12] border border-slate-700 focus:border-[#00ff66] rounded px-3 py-1.5 text-white outline-none"
                     />
-                    {members.length > 1 && (
+                    {members.length > 2 && (
                       <button
                         type="button"
                         onClick={() => handleRemoveMember(idx)}

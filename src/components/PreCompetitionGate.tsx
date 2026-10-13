@@ -13,6 +13,7 @@ import {
   ExternalLink,
   Zap,
   Maximize2,
+  Key,
 } from 'lucide-react';
 import { playSuccessChime, playCyberBlip } from '../utils/audio.ts';
 import { requestAppFullscreen, isAppFullscreen } from '../utils/fullscreen.ts';
@@ -26,6 +27,7 @@ interface PreCompetitionGateProps {
   hasStarted?: boolean;
   onConfirmReady?: () => Promise<void> | void;
   onNavigateToChallenges?: () => void;
+  onOpenAuthModal?: () => void;
 }
 
 export const PreCompetitionGate: React.FC<PreCompetitionGateProps> = ({
@@ -37,6 +39,7 @@ export const PreCompetitionGate: React.FC<PreCompetitionGateProps> = ({
   hasStarted = false,
   onConfirmReady,
   onNavigateToChallenges,
+  onOpenAuthModal,
 }) => {
   const [isActivating, setIsActivating] = useState(false);
 
@@ -48,6 +51,13 @@ export const PreCompetitionGate: React.FC<PreCompetitionGateProps> = ({
   };
 
   const handleStart = async () => {
+    if (!teamName) {
+      playCyberBlip(750);
+      if (onOpenAuthModal) onOpenAuthModal();
+      else if (onNavigateToChallenges) onNavigateToChallenges();
+      return;
+    }
+
     if (hasStarted) {
       if (onNavigateToChallenges) onNavigateToChallenges();
       return;
@@ -136,7 +146,7 @@ export const PreCompetitionGate: React.FC<PreCompetitionGateProps> = ({
         <div className="mt-4 p-4 rounded-xl bg-[#080b12] border border-slate-800">
           <div className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-2 flex items-center gap-1.5">
             <Users className="w-3.5 h-3.5 text-purple-400" />
-            <span>TEAM MEMBERS ({members.length}/4):</span>
+            <span>TEAM MEMBERS ({members.length}/3):</span>
           </div>
           <div className="flex flex-wrap gap-2">
             {members.map((member, i) => (
@@ -212,7 +222,9 @@ export const PreCompetitionGate: React.FC<PreCompetitionGateProps> = ({
         {/* Action Button: START COMPETITION / RESUME CHALLENGES */}
         <div className="mt-8 pt-6 border-t border-slate-800 flex flex-col items-center text-center">
           <p className="text-xs text-slate-400 mb-4 max-w-md">
-            {hasStarted
+            {!teamName
+              ? 'Review the guidelines above. Once ready, register your squad or log in to unlock challenges and enter the live tournament.'
+              : hasStarted
               ? 'Your squad is currently participating in the competition. You can review the guidelines above at any time.'
               : 'Click the button below when your team is ready to begin. The test will automatically enter Fullscreen mode, your timer will start, and all challenges will unlock.'}
           </p>
@@ -221,12 +233,19 @@ export const PreCompetitionGate: React.FC<PreCompetitionGateProps> = ({
             onClick={handleStart}
             disabled={isActivating}
             className={`w-full sm:w-auto px-10 py-4 font-mono font-black text-sm sm:text-base tracking-widest uppercase rounded-xl flex items-center justify-center gap-3 transition-all duration-200 active:scale-95 disabled:opacity-50 cursor-pointer ${
-              hasStarted
+              !teamName
+                ? 'bg-[#00ff66] hover:bg-[#00ff66]/85 text-black shadow-[0_0_25px_rgba(0,255,102,0.5)] hover:shadow-[0_0_40px_rgba(0,255,102,0.8)]'
+                : hasStarted
                 ? 'bg-cyan-400 hover:bg-cyan-300 text-black shadow-[0_0_25px_rgba(6,182,212,0.5)] hover:shadow-[0_0_40px_rgba(6,182,212,0.8)]'
                 : 'bg-[#00ff66] hover:bg-[#00ff66]/85 text-black shadow-[0_0_25px_rgba(0,255,102,0.5)] hover:shadow-[0_0_40px_rgba(0,255,102,0.8)]'
             }`}
           >
-            {hasStarted ? (
+            {!teamName ? (
+              <>
+                <Key className="w-5 h-5 text-black" />
+                <span>SIGN UP / LOG IN TO COMPETE</span>
+              </>
+            ) : hasStarted ? (
               <>
                 <Terminal className="w-5 h-5 text-black" />
                 <span>RESUME CHALLENGES</span>

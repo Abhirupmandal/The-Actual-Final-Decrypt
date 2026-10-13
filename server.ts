@@ -284,7 +284,7 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 <head><meta charset="utf-8"><title>404 Not Found</title></head>
 <body style="font-family:sans-serif;text-align:center;padding:50px;background:#fff;color:#222;">
   <h1>404 Not Found</h1>
-  <p>The requested URL ${sanitizeInput(req.path)} was not found on this server.</p>
+  <p>The requested URL was not found on this server.</p>
 </body>
 </html>`);
   }
@@ -398,6 +398,7 @@ function broadcastState() {
   const sorted = getSortedLeaderboard();
   leaderboardStore.syncLeaderboard(sorted); // Persist evaluated rankings to SQLite leaderboard table
   redisCache.invalidate('cache:state');
+  redisCache.invalidate('cache:state:public');
   io.emit('state_update', {
     competitionState,
     leaderboard: sorted,
@@ -670,17 +671,29 @@ setInterval(() => {
       competitionState.remainingSeconds--;
       if (competitionState.remainingSeconds === 0) {
         competitionState.status = 'ended';
-        competitionState.writeupMode = true; // Auto-transition to writeup mode!
+        competitionState.remainingSeconds = 0;
         competitionStateStore.saveState(competitionState);
+
+        // 1.) Auto-finalize: calculate final unbiased points and standings for all participants
+        invalidateLeaderboardCache();
+        const finalStandings = getSortedLeaderboard();
+        leaderboardStore.syncLeaderboard(finalStandings);
+        teamStore.flushToDisk();
+        const top3 = finalStandings.slice(0, 3);
+
         const alertEvent: ActivityFeedEvent = {
           id: 'act-' + crypto.randomUUID(),
           timestamp: Date.now(),
           type: 'announcement',
           teamName: 'SYSTEM',
-          message: 'COMPETITION TIME EXPIRED! All submissions locked. Official challenge writeups are now available.',
+          message: 'COMPETITION TIME EXPIRED! All submissions locked. Official tournament rankings are finalized.',
         };
         recordUserActivity(alertEvent);
-        io.emit('competition_ended');
+
+        // 2.) Broadcast completion and top 3 winners podium to all participant screens
+        io.emit('competition_ended', { top3, finalStandings });
+        broadcastLeaderboard();
+        broadcastState();
       }
     }
   }
@@ -781,7 +794,7 @@ app.post('/api/auth/signup', (req: Request, res: Response) => {
     return res.status(429).json({ success: false, error: rateResult.reason });
   }
 
-  // Input Validation with Zod (enforces min 8 chars with letter + number, 1-4 members)
+  // Input Validation with Zod (enforces min 8 chars with letter + number, 2-3 members)
   const validation = TeamSignupSchema.safeParse(req.body);
   if (!validation.success) {
     return res.status(400).json({
@@ -918,22 +931,16 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
   let activeOperatorName = ADMIN_USERNAME;
 
   if (isMatchAdminUserId) {
-    const givenBuffer = Buffer.from(password);
-    const targetBuffer = Buffer.from(ADMIN_PASSWORD);
-    if (
-      givenBuffer.length === targetBuffer.length &&
-      crypto.timingSafeEqual(givenBuffer, targetBuffer)
-    ) {
+    const givenHash = crypto.createHash('sha256').update(password).digest();
+    const targetHash = crypto.createHash('sha256').update(ADMIN_PASSWORD).digest();
+    if (crypto.timingSafeEqual(givenHash, targetHash)) {
       isOperatorAuth = true;
       activeOperatorName = ADMIN_USERNAME;
     }
   } else if (matchedOperator) {
-    const givenBuffer = Buffer.from(password);
-    const targetBuffer = Buffer.from(matchedOperator.passkey);
-    if (
-      givenBuffer.length === targetBuffer.length &&
-      crypto.timingSafeEqual(givenBuffer, targetBuffer)
-    ) {
+    const givenHash = crypto.createHash('sha256').update(password).digest();
+    const targetHash = crypto.createHash('sha256').update(matchedOperator.passkey).digest();
+    if (crypto.timingSafeEqual(givenHash, targetHash)) {
       isOperatorAuth = true;
       activeOperatorName = matchedOperator.displayName;
     }
@@ -1089,15 +1096,15 @@ app.post('/api/auth/team', (req: Request, res: Response) => {
     }
   }
 
-  let team: Team;
   if (existingTeam) {
-    team = existingTeam;
-    if (sanitizedMembers.length > team.members.length) {
-      team.members = sanitizedMembers;
-    }
-  } else {
-    const id = 'team-' + crypto.randomUUID();
-    team = {
+    return res.status(409).json({
+      success: false,
+      error: 'Team name is already registered. Please authenticate via team login with your password.',
+    });
+  }
+
+  const id = 'team-' + crypto.randomUUID();
+  const team: Team = {
       id,
       teamName: sanitizedTeamName,
       members: sanitizedMembers,
@@ -1137,7 +1144,6 @@ app.post('/api/auth/team', (req: Request, res: Response) => {
       },
       ip
     );
-  }
 
   // 3.) Issue cryptographic signed session token
   const token = createSignedToken('team', team.id);
@@ -1203,20 +1209,15 @@ app.post('/api/auth/admin', (req: Request, res: Response) => {
 
   const { password } = validation.data;
 
-  // Timing-safe comparison to prevent timing side-channel attacks
-  const givenBuffer = Buffer.from(password);
-  const targetBuffer = Buffer.from(ADMIN_PASSWORD);
-  const isMatch =
-    givenBuffer.length === targetBuffer.length &&
-    crypto.timingSafeEqual(givenBuffer, targetBuffer);
+  // Timing-safe comparison using uniform 32-byte SHA-256 digests
+  const givenHash = crypto.createHash('sha256').update(password).digest();
+  const targetHash = crypto.createHash('sha256').update(ADMIN_PASSWORD).digest();
+  const isMatch = crypto.timingSafeEqual(givenHash, targetHash);
 
   const operators = getManagementOperators();
   const matchedOperator = operators.find((op) => {
-    const opBuffer = Buffer.from(op.passkey);
-    return (
-      givenBuffer.length === opBuffer.length &&
-      crypto.timingSafeEqual(givenBuffer, opBuffer)
-    );
+    const opHash = crypto.createHash('sha256').update(op.passkey).digest();
+    return crypto.timingSafeEqual(givenHash, opHash);
   });
 
   if (isMatch || matchedOperator) {
@@ -1420,16 +1421,7 @@ app.post('/api/submit-flag', requireTeamAuth, flagSubmissionRateLimiter, (req: R
       firstBloodTeam: chal.firstBloodTeam,
     });
 
-    // Calculate deducted hints
-    const hintsUnlocked = team.hintsUnlocked[challengeId] || [];
-    let hintPenalties = 0;
-    chal.hints.forEach((h) => {
-      if (hintsUnlocked.includes(h.id)) {
-        hintPenalties += h.cost;
-      }
-    });
-
-    const basePoints = Math.max(10, chal.points - hintPenalties);
+    const basePoints = chal.points;
     const bonusPoints = isFirstBlood ? 50 : 0;
     const finalPoints = basePoints + bonusPoints;
 
@@ -1607,9 +1599,19 @@ app.post('/api/unlock-hint', requireTeamAuth, (req: Request, res: Response) => {
     return res.json({ success: true, hintContent: hint.content, message: 'Hint already purchased.' });
   }
 
+  const hintPenalty = Math.max(0, hint.cost || 0);
+  if (hintPenalty > 0) {
+    team.score = Math.max(0, team.score - hintPenalty);
+  }
+
   team.hintsUnlocked[challengeId].push(hintId);
-  teamStore.update(team.id, { hintsUnlocked: team.hintsUnlocked });
+  teamStore.update(team.id, {
+    score: team.score,
+    hintsUnlocked: team.hintsUnlocked,
+  });
   io.emit('admin:team_updated', team);
+  broadcastLeaderboard();
+  broadcastState();
 
   const event: ActivityFeedEvent = {
     id: 'act-' + crypto.randomUUID(),
@@ -1617,8 +1619,8 @@ app.post('/api/unlock-hint', requireTeamAuth, (req: Request, res: Response) => {
     type: 'hint_unlocked',
     teamName: team.teamName,
     challengeTitle: chal.title,
-    points: -hint.cost,
-    message: `Unlocked Hint for ${chal.title} (-${hint.cost} reward penalty).`,
+    points: -hintPenalty,
+    message: `Unlocked Hint for ${chal.title} (-${hintPenalty} pts deducted from score).`,
   };
   recordUserActivity(event);
 
@@ -1631,7 +1633,8 @@ app.post('/api/unlock-hint', requireTeamAuth, (req: Request, res: Response) => {
       challengeId: chal.id,
       challengeTitle: chal.title,
       hintId: hint.id,
-      cost: hint.cost,
+      cost: hintPenalty,
+      newScore: team.score,
     },
     ip
   );
@@ -1639,8 +1642,9 @@ app.post('/api/unlock-hint', requireTeamAuth, (req: Request, res: Response) => {
   res.json({
     success: true,
     hintContent: hint.content,
-    penalty: hint.cost,
-    message: `Hint unlocked! -${hint.cost} pts deducted from final reward upon decryption.`,
+    penalty: hintPenalty,
+    teamScore: team.score,
+    message: `Hint unlocked! -${hintPenalty} pts deducted immediately from your team score.`,
   });
 });
 
@@ -1651,12 +1655,21 @@ app.get('/api/challenges/:id/attachment', (req: Request, res: Response) => {
     return res.status(404).json({ success: false, error: 'Artifact attachment not found.' });
   }
 
-  const diskPath = path.join(__dirname, 'attachments', chal.attachment.fileName);
+  const attachmentsDir = path.resolve(__dirname, 'attachments');
+  const rawFileName = path.basename(chal.attachment.fileName);
+  const diskPath = path.resolve(attachmentsDir, rawFileName);
+
+  // Security: Enforce strict directory containment against path traversal
+  if (!diskPath.startsWith(attachmentsDir)) {
+    logSecurityEvent('PATH_TRAVERSAL_ATTEMPT', `Path traversal attempt on attachment: ${chal.attachment.fileName}`, getClientIp(req), undefined, 'high');
+    return res.status(403).json({ success: false, error: 'Path traversal violation detected.' });
+  }
+
   const diskExists = fs.existsSync(diskPath);
   const fileSize = diskExists ? fs.statSync(diskPath).size : Buffer.byteLength(chal.attachment.content || '');
 
   const validation = validateFileAttachment(
-    chal.attachment.fileName,
+    rawFileName,
     fileSize
   );
 
@@ -2061,6 +2074,17 @@ app.post('/api/feedback', async (req: Request, res: Response) => {
     }
   }
 
+  // Enforce Single Feedback Rule: Multiple feedback submissions from a team are not allowed
+  const existingFeedback = feedbackStore.getByTeam(resolvedTeamId, resolvedTeamName);
+  if (existingFeedback) {
+    return res.status(409).json({
+      success: false,
+      alreadySubmitted: true,
+      error: `Feedback has already been submitted for Team ${existingFeedback.teamName}. Multiple feedback submissions from the same team are strictly restricted.`,
+      feedback: existingFeedback,
+    });
+  }
+
   const {
     ratingUi,
     challengeDifficulty,
@@ -2138,6 +2162,113 @@ app.get('/api/feedback/my', (req: Request, res: Response) => {
 app.get('/api/admin/feedbacks', requireAdminAuth, (_req: Request, res: Response) => {
   const all = feedbackStore.getAll();
   res.json({ feedbacks: all });
+});
+
+// Admin delete individual feedback
+app.delete('/api/admin/feedbacks/:id', requireAdminAuth, (req: Request, res: Response) => {
+  const { id } = req.params;
+  const ok = feedbackStore.deleteById(id);
+  const ip = getClientIp(req);
+  recordAuditLog('ADMIN', 'Admin', 'FEEDBACK_DELETED', { feedbackId: id, success: ok }, ip);
+  res.json({
+    success: ok,
+    message: ok ? 'Feedback deleted successfully' : 'Failed to delete feedback entry',
+  });
+});
+
+// Admin clear all feedbacks
+app.post('/api/admin/feedbacks/clear', requireAdminAuth, (req: Request, res: Response) => {
+  feedbackStore.clearAll();
+  const ip = getClientIp(req);
+  recordAuditLog('ADMIN', 'Admin', 'ALL_FEEDBACK_CLEARED', {}, ip);
+  res.json({ success: true, message: 'All feedback submissions successfully purged.' });
+});
+
+app.delete('/api/admin/feedbacks', requireAdminAuth, (req: Request, res: Response) => {
+  feedbackStore.clearAll();
+  const ip = getClientIp(req);
+  recordAuditLog('ADMIN', 'Admin', 'ALL_FEEDBACK_CLEARED', {}, ip);
+  res.json({ success: true, message: 'All feedback submissions successfully purged.' });
+});
+
+// Admin export feedbacks in Excel format (UTF-8 BOM CSV)
+app.get('/api/admin/export-feedbacks-excel', requireAdminAuth, (_req: Request, res: Response) => {
+  const feedbacks = feedbackStore.getAll();
+  const bom = '\uFEFF';
+  const headers = [
+    'Feedback ID',
+    'Team Name',
+    'Team ID',
+    'Submission Date & Time',
+    'UI / UX Rating (1-5)',
+    'Challenge Difficulty',
+    'Platform Stability (1-5)',
+    'Fair Play & Security',
+    'Rules & Hints Clarity (1-5)',
+    'Favorite Challenge / Highlight',
+    'Candid Suggestions for Round 3',
+  ].join(',') + '\r\n';
+
+  const esc = (s: any) => {
+    if (s === null || s === undefined) return '""';
+    const str = String(s).replace(/"/g, '""');
+    return `"${str}"`;
+  };
+
+  const rows = feedbacks
+    .map((f) => {
+      const dateStr = new Date(f.submittedAt).toISOString();
+      return [
+        esc(f.id),
+        esc(f.teamName),
+        esc(f.teamId),
+        esc(dateStr),
+        f.ratingUi,
+        esc(f.challengeDifficulty),
+        f.platformStability,
+        esc(f.fairPlaySecurity),
+        f.clarityRulesHints,
+        esc(f.favoriteHighlight),
+        esc(f.suggestionsRound3),
+      ].join(',');
+    })
+    .join('\r\n');
+
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="ctf_feedback_export_${Date.now()}.csv"`
+  );
+  res.send(bom + headers + rows);
+});
+
+// Record student post-event final dashboard view
+app.post('/api/post-event/viewed', (req: Request, res: Response) => {
+  const ip = getClientIp(req);
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  let resolvedTeamName = 'Participant';
+  let resolvedTeamId = 'anonymous';
+
+  if (token) {
+    const verified = verifySignedToken(token);
+    if (verified.valid && verified.payload && verified.payload.role === 'team') {
+      const t = teams.get(verified.payload.subjectId) || teamStore.getById(verified.payload.subjectId);
+      if (t) {
+        resolvedTeamId = t.id;
+        resolvedTeamName = t.teamName;
+      }
+    }
+  }
+
+  recordAuditLog(
+    'STUDENT',
+    resolvedTeamName,
+    'POST_EVENT_VIEWED',
+    { teamId: resolvedTeamId, teamName: resolvedTeamName },
+    ip
+  );
+
+  res.json({ success: true });
 });
 
 // ======================== ADMIN ENDPOINTS ========================
@@ -2258,7 +2389,7 @@ app.post('/api/admin/timer', requireAdminAuth, (req: Request, res: Response) => 
     recordAuditLog(
       'ADMIN',
       'ADMIN_CONSOLE',
-      'ADMIN_TIMER_SET',
+      'ADMIN_TIMER_SUBTRACT',
       {
         action: 'subtract',
         seconds,
@@ -2266,6 +2397,42 @@ app.post('/api/admin/timer', requireAdminAuth, (req: Request, res: Response) => 
       },
       ip
     );
+  } else if (action === 'end' || action === 'finish') {
+    competitionState.status = 'ended';
+    competitionState.remainingSeconds = 0;
+    competitionStateStore.saveState(competitionState);
+
+    // Auto-finalize points and standings for all participants with zero bias
+    invalidateLeaderboardCache();
+    const finalStandings = getSortedLeaderboard();
+    leaderboardStore.syncLeaderboard(finalStandings);
+    teamStore.flushToDisk();
+    const top3 = finalStandings.slice(0, 3);
+
+    const alertEvent: ActivityFeedEvent = {
+      id: 'act-' + crypto.randomUUID(),
+      timestamp: Date.now(),
+      type: 'announcement',
+      teamName: 'ADMIN',
+      message: 'COMPETITION OFFICIALLY ENDED BY ADMIN! All challenge submissions locked. Final standings verified.',
+    };
+    recordUserActivity(alertEvent);
+
+    recordAuditLog(
+      'ADMIN',
+      'ADMIN_CONSOLE',
+      'ADMIN_COMPETITION_END',
+      {
+        action: 'end_competition',
+        finalTeamsCount: finalStandings.length,
+        top3: top3.map((t) => ({ rank: t.rank, teamName: t.teamName, score: t.score })),
+      },
+      ip
+    );
+
+    // Broadcast completion and top 3 winners podium to all participant screens
+    io.emit('competition_ended', { top3, finalStandings });
+    broadcastLeaderboard();
   }
 
   // Persist updated timer state to SQLite
@@ -2364,7 +2531,10 @@ app.post('/api/admin/writeup-mode', requireAdminAuth, (req: Request, res: Respon
   const { enabled } = req.body;
   competitionState.writeupMode = Boolean(enabled);
   competitionStateStore.saveState(competitionState); // Persist to SQLite
+  redisCache.invalidate('cache:state');
+  redisCache.invalidate('cache:state:public');
   broadcastState();
+  io.emit('writeup_mode_changed', { writeupMode: competitionState.writeupMode });
   res.json({ success: true, writeupMode: competitionState.writeupMode });
 });
 

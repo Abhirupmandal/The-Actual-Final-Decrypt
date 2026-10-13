@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   MessageSquareHeart,
   Star,
@@ -13,6 +13,9 @@ import {
   Layers,
   Heart,
   Smile,
+  Lock,
+  ArrowRight,
+  Clock,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import type { Team, FeedbackSubmission } from '../types.ts';
@@ -21,11 +24,17 @@ import { playSuccessChime, playCyberBlip, playErrorBuzz } from '../utils/audio.t
 interface FeedbackSectionProps {
   team: { id: string; teamName: string; [key: string]: any } | null;
   onOpenAuthModal?: () => void;
+  isMandatoryIntermission?: boolean;
+  onUnlockFinalDashboard?: () => void;
+  onFeedbackSubmitted?: () => void;
 }
 
 export const FeedbackSection: React.FC<FeedbackSectionProps> = ({
   team,
   onOpenAuthModal,
+  isMandatoryIntermission = false,
+  onUnlockFinalDashboard,
+  onFeedbackSubmitted,
 }) => {
   const [ratingUi, setRatingUi] = useState<number>(5);
   const [challengeDifficulty, setChallengeDifficulty] = useState<string>('balanced');
@@ -40,6 +49,24 @@ export const FeedbackSection: React.FC<FeedbackSectionProps> = ({
   const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
   const [submittedTeamName, setSubmittedTeamName] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
+  const onUnlockFinalDashboardRef = useRef(onUnlockFinalDashboard);
+  onUnlockFinalDashboardRef.current = onUnlockFinalDashboard;
+
+  // Mandatory Countdown Redirect to Final Leaderboard after submission
+  useEffect(() => {
+    if (redirectCountdown === null) return;
+    if (redirectCountdown <= 0) {
+      if (onUnlockFinalDashboardRef.current) {
+        onUnlockFinalDashboardRef.current();
+      }
+      return;
+    }
+    const timer = setTimeout(() => {
+      setRedirectCountdown((prev) => (prev !== null && prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [redirectCountdown]);
 
   // Sync existing feedback on load
   useEffect(() => {
@@ -129,6 +156,16 @@ export const FeedbackSection: React.FC<FeedbackSectionProps> = ({
         setSubmittedTeamName(activeTeamName);
         setIsSubmitted(true);
         triggerCelebration();
+        onFeedbackSubmitted?.();
+
+        // Start visible 4-second mandatory redirect countdown to the final leaderboard
+        setRedirectCountdown(4);
+      } else if (res.status === 409 || data?.alreadySubmitted) {
+        setSubmittedTeamName(activeTeamName);
+        setIsSubmitted(true);
+        setError(data.error || 'Your squad has already submitted feedback. Multiple submissions are not allowed.');
+        onFeedbackSubmitted?.();
+        setRedirectCountdown(3);
       } else {
         setError(data.error || 'Failed to transmit feedback. Please try again.');
         playErrorBuzz();
@@ -157,6 +194,22 @@ export const FeedbackSection: React.FC<FeedbackSectionProps> = ({
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 font-mono pb-16 animate-fadeIn">
+      {/* Mandatory Post-Event Intermission Gate Banner */}
+      {isMandatoryIntermission && (
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-950/90 via-[#181105] to-amber-950/90 border-2 border-amber-500/80 p-5 sm:p-6 text-center space-y-3 shadow-[0_0_40px_rgba(245,158,11,0.3)] animate-pulse">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/50 text-[11px] font-bold uppercase tracking-wider">
+            <Lock className="w-3.5 h-3.5 text-amber-400" />
+            <span>MANDATORY POST-EVENT DEBRIEF // UNLOCK GATEWAY</span>
+          </div>
+          <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight">
+            COMPLETE FEEDBACK TO UNLOCK FINAL LEADERBOARD
+          </h2>
+          <p className="text-xs sm:text-sm text-amber-200/90 font-sans max-w-xl mx-auto leading-relaxed">
+            The competition has concluded! To maintain platform integrity and analyze challenge metrics, all participants must submit this brief 7-question debrief. Once submitted, the official final standings will immediately unlock (official challenge writeups will be accessible once released by competition administrators).
+          </p>
+        </div>
+      )}
+
       {/* Header Banner */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#05111c] via-[#081726] to-[#040b13] border border-cyan-500/30 p-6 sm:p-8 shadow-[0_10px_35px_rgba(0,0,0,0.8)]">
         <div className="absolute top-0 right-0 w-80 h-80 bg-cyan-500/5 rounded-full blur-3xl pointer-events-none" />
@@ -168,7 +221,6 @@ export const FeedbackSection: React.FC<FeedbackSectionProps> = ({
 
           <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight flex flex-wrap items-center gap-2">
             <span>YOUR VALUABLE FEEDBACK</span>
-            <span className="text-cyan-400">// ROUND 2</span>
           </h1>
 
           <p className="text-xs sm:text-sm text-slate-300 font-sans leading-relaxed max-w-2xl">
@@ -187,43 +239,61 @@ export const FeedbackSection: React.FC<FeedbackSectionProps> = ({
               <Sparkles className="w-3.5 h-3.5" />
               <span>Takes ~2 Minutes</span>
             </span>
-            <span>·</span>
-            <span className="flex items-center gap-1.5 text-rose-400">
-              <Heart className="w-3.5 h-3.5 fill-rose-500/30" />
-              <span>Direct Impact on Round 3</span>
-            </span>
           </div>
         </div>
       </div>
 
       {/* Completion Banner (When Submitted) */}
       {isSubmitted && (
-        <div className="rounded-2xl bg-gradient-to-r from-emerald-950/80 via-[#072418] to-emerald-950/80 border-2 border-[#00ff66] p-6 sm:p-8 text-center space-y-4 shadow-[0_0_35px_rgba(0,255,102,0.35)] animate-fadeIn">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-[#00ff66]/15 border border-[#00ff66] flex items-center justify-center text-[#00ff66] shadow-[0_0_25px_rgba(0,255,102,0.5)]">
-            <Award className="w-8 h-8" />
+        <div className="rounded-3xl bg-gradient-to-r from-emerald-950/90 via-[#072418] to-emerald-950/90 border-2 border-[#00ff66] p-8 sm:p-12 text-center space-y-6 shadow-[0_0_50px_rgba(0,255,102,0.4)] animate-fadeIn">
+          <div className="w-20 h-20 mx-auto rounded-3xl bg-[#00ff66]/15 border-2 border-[#00ff66] flex items-center justify-center text-[#00ff66] shadow-[0_0_35px_rgba(0,255,102,0.6)] animate-bounce">
+            <Award className="w-10 h-10" />
           </div>
 
-          <div className="space-y-1.5">
-            <h2 className="text-xl sm:text-3xl font-black text-white tracking-wider">
-              Thanks Team {submittedTeamName || team?.teamName || 'Squad'} for your valuable feedback!
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#00ff66]/15 text-[#00ff66] border border-[#00ff66]/40 text-xs font-bold uppercase tracking-wider">
+              <CheckCircle2 className="w-4 h-4" />
+              <span>FEEDBACK SUBMISSION RECORDED</span>
+            </div>
+            <h2 className="text-2xl sm:text-4xl font-black text-white tracking-wide uppercase drop-shadow">
+              THANK YOU FOR SUBMITTING THE FEEDBACK FORM!
             </h2>
-            <p className="text-xs sm:text-sm text-emerald-300 font-sans max-w-lg mx-auto">
-              Your honest response has been recorded in our persistent feedback store. We truly appreciate your time
-              and contribution toward making The Final Decrypt an extraordinary CTF experience.
+            <p className="text-sm sm:text-base text-emerald-300 font-sans max-w-xl mx-auto font-medium">
+              Thank you for filling the feedback! Your authentic response has been recorded into the official evaluation registry.
             </p>
           </div>
 
-          <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
-            <button
-              onClick={() => {
-                setIsSubmitted(false);
-                playCyberBlip(500);
-              }}
-              className="px-4 py-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Edit / Update Feedback</span>
-            </button>
+          {/* Live countdown notice */}
+          {redirectCountdown !== null && (
+            <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#040d16] border border-emerald-500/50 text-xs sm:text-sm text-emerald-400 font-mono shadow-inner">
+              <Clock className="w-4 h-4 text-[#00ff66] animate-spin" />
+              <span>
+                Redirecting to Final Leaderboard in <strong className="text-white font-black">{redirectCountdown}s</strong>...
+              </span>
+            </div>
+          )}
+
+          {/* Mandatory Direct Action to Final Leaderboard */}
+          {onUnlockFinalDashboard && (
+            <div className="pt-2">
+              <button
+                onClick={() => {
+                  playCyberBlip(800);
+                  onUnlockFinalDashboard();
+                }}
+                className="w-full sm:w-auto mx-auto px-10 py-4 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-400 to-[#00ff66] hover:from-emerald-400 hover:to-[#00ff66] text-black font-black uppercase text-xs sm:text-sm tracking-wider shadow-[0_0_35px_rgba(0,255,102,0.6)] hover:shadow-[0_0_50px_rgba(0,255,102,0.9)] flex items-center justify-center gap-3 transition-all transform hover:scale-105 cursor-pointer"
+              >
+                <span>PROCEED TO FINAL LEADERBOARD {redirectCountdown !== null ? `(${redirectCountdown}s)` : ''}</span>
+                <ArrowRight className="w-5 h-5 text-black" />
+              </button>
+            </div>
+          )}
+
+          <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 text-slate-400 border border-slate-800 text-[11px] font-mono">
+              <Lock className="w-3.5 h-3.5 text-amber-400" />
+              <span>Feedback is sealed &amp; recorded. Multiple submissions per team are restricted.</span>
+            </div>
             <button
               onClick={triggerCelebration}
               className="px-4 py-2 rounded-xl bg-[#00ff66]/20 hover:bg-[#00ff66]/30 text-[#00ff66] border border-[#00ff66]/60 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer shadow-[0_0_15px_rgba(0,255,102,0.3)]"
@@ -529,10 +599,10 @@ export const FeedbackSection: React.FC<FeedbackSectionProps> = ({
                   <span className="w-6 h-6 rounded-lg bg-rose-500/20 text-rose-400 text-xs flex items-center justify-center font-black">
                     7
                   </span>
-                  <span>Candid Suggestions for Round 3 (Honest Reply)</span>
+                  <span>Candid Suggestions & Improvements (Honest Reply)</span>
                 </h3>
                 <p className="text-xs text-slate-400 font-sans mt-1">
-                  What is one thing we should improve, remove, add, or alter for Round 3? Please be totally honest—we appreciate constructive criticism!
+                  What is one thing we should improve, remove, add, or alter? Please be totally honest—we appreciate constructive criticism!
                 </p>
               </div>
               <span className="text-[10px] text-slate-500 tabular-nums">{suggestionsRound3.length} / 2000</span>

@@ -19,6 +19,7 @@ import type {
   AuditActionType,
   FeedbackSubmission,
 } from '../types.ts';
+import { postgresSync } from './postgresSync.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -228,6 +229,54 @@ class SqliteTeamStore {
       team.startedAt || null,
     ]);
 
+    stmt.free();
+
+    if (postgresSync.isEnabled()) {
+      postgresSync.saveTeam(team);
+    }
+  }
+
+  /**
+   * Insert team loaded from remote cloud PostgreSQL
+   */
+  public upsertFromPostgres(team: Team): void {
+    this.teams.set(team.id, team);
+    this.nameIndex.set(team.teamName.toLowerCase().trim(), team.id);
+    if (team.email) {
+      this.emailIndex.set(team.email.toLowerCase().trim(), team.id);
+    }
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO teams (
+        id, team_name, email, password_hash, password_salt, members, score, solves,
+        hints_unlocked, failed_attempts, total_failed_attempts, last_solve_time,
+        registered_at, ip, strikes, is_disqualified, disqualified_reason,
+        disqualified_at, is_flagged_anomaly, anomaly_reason, has_started, started_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    `);
+    stmt.run([
+      team.id,
+      team.teamName,
+      team.email || null,
+      team.passwordHash || null,
+      team.passwordSalt || null,
+      JSON.stringify(team.members || []),
+      team.score || 0,
+      JSON.stringify(team.solves || {}),
+      JSON.stringify(team.hintsUnlocked || {}),
+      JSON.stringify(team.failedAttempts || {}),
+      team.totalFailedAttempts || 0,
+      team.lastSolveTime || 0,
+      team.registeredAt || Date.now(),
+      team.ip || '127.0.0.1',
+      team.strikes || 0,
+      team.isDisqualified ? 1 : 0,
+      team.disqualifiedReason || null,
+      team.disqualifiedAt || null,
+      team.isFlaggedAnomaly ? 1 : 0,
+      team.anomalyReason || null,
+      team.hasStarted ? 1 : 0,
+      team.startedAt || null,
+    ]);
     stmt.free();
   }
 
@@ -898,6 +947,11 @@ class SqliteActivityFeedStore {
     ]);
     stmt.free();
     this.syncFn();
+
+    if (postgresSync.isEnabled()) {
+      postgresSync.saveActivity(event);
+    }
+
     return event;
   }
 
@@ -992,6 +1046,10 @@ class SqliteCompetitionStateStore {
       stmt.run([JSON.stringify(state)]);
       stmt.free();
       this.syncFn();
+
+      if (postgresSync.isEnabled()) {
+        postgresSync.saveCompetitionConfig(state);
+      }
     } catch (err) {
       console.error('[SQLite CompetitionStateStore] Error saving competition state:', err);
     }
@@ -1043,6 +1101,11 @@ class SqliteSubmissionStore {
     ]);
     stmt.free();
     this.syncFn();
+
+    if (postgresSync.isEnabled()) {
+      postgresSync.saveSubmission(sub);
+    }
+
     return sub;
   }
 
@@ -1551,6 +1614,10 @@ class SqliteFeedbackStore {
         ]
       );
       this.syncFn();
+
+      if (postgresSync.isEnabled()) {
+        postgresSync.saveFeedback(feedback);
+      }
     } catch (err) {
       console.error('[SQLite FeedbackStore] Error saving feedback:', err);
     }
@@ -1585,6 +1652,38 @@ class SqliteFeedbackStore {
     }
   }
 
+  public getByTeam(teamId: string, teamName?: string): FeedbackSubmission | null {
+    try {
+      const cleanName = (teamName || '').toLowerCase().trim();
+      const stmt = this.db.prepare(
+        'SELECT * FROM user_feedbacks WHERE team_id = ? OR (team_name != "" AND LOWER(TRIM(team_name)) = ?) ORDER BY submitted_at DESC LIMIT 1;'
+      );
+      stmt.bind([teamId, cleanName]);
+      if (stmt.step()) {
+        const row = stmt.getAsObject();
+        stmt.free();
+        return {
+          id: String(row.id),
+          teamId: String(row.team_id),
+          teamName: String(row.team_name),
+          ratingUi: Number(row.rating_ui),
+          challengeDifficulty: String(row.challenge_difficulty),
+          platformStability: Number(row.platform_stability),
+          fairPlaySecurity: String(row.fair_play_security),
+          clarityRulesHints: Number(row.clarity_rules_hints),
+          favoriteHighlight: String(row.favorite_highlight || ''),
+          suggestionsRound3: String(row.suggestions_round3 || ''),
+          submittedAt: Number(row.submitted_at),
+        };
+      }
+      stmt.free();
+      return null;
+    } catch (err) {
+      console.error('[SQLite FeedbackStore] Error querying feedback by team identifier:', err);
+      return null;
+    }
+  }
+
   public getAll(): FeedbackSubmission[] {
     try {
       const stmt = this.db.prepare('SELECT * FROM user_feedbacks ORDER BY submitted_at DESC;');
@@ -1613,6 +1712,17 @@ class SqliteFeedbackStore {
     }
   }
 
+  public deleteById(id: string): boolean {
+    try {
+      this.db.run('DELETE FROM user_feedbacks WHERE id = ?;', [id]);
+      this.syncFn();
+      return true;
+    } catch (err) {
+      console.error('[SQLite FeedbackStore] Error deleting feedback by id:', err);
+      return false;
+    }
+  }
+
   public clearAll(): void {
     try {
       this.db.run('DELETE FROM user_feedbacks;');
@@ -1627,5 +1737,35 @@ export const feedbackStore = new SqliteFeedbackStore(
   teamStore.getDb(),
   () => teamStore.sync()
 );
+
+// Auto-initialize remote PostgreSQL sync on server boot if DATABASE_URL is configured
+if (postgresSync.isEnabled()) {
+  postgresSync.initSchema().then(async (ready) => {
+    if (ready) {
+      try {
+        const pgTeams = await postgresSync.loadTeams();
+        if (pgTeams.length > 0) {
+          console.log(`[PostgreSQL] Loaded ${pgTeams.length} teams from remote cloud PostgreSQL.`);
+          for (const t of pgTeams) {
+            teamStore.upsertFromPostgres(t);
+          }
+        } else {
+          console.log('[PostgreSQL] Remote database is fresh. Syncing local teams to PostgreSQL...');
+          for (const t of teamStore.getAll()) {
+            await postgresSync.saveTeam(t);
+          }
+        }
+
+        const pgConfig = await postgresSync.loadCompetitionConfig();
+        if (pgConfig) {
+          console.log('[PostgreSQL] Loaded competition configuration from remote cloud PostgreSQL.');
+          competitionStateStore.saveState(pgConfig);
+        }
+      } catch (e) {
+        console.error('[PostgreSQL] Error during initial state synchronization:', e);
+      }
+    }
+  });
+}
 
 

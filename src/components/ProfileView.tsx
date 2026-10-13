@@ -275,7 +275,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 </span>
               </div>
               <span className="text-[10px] text-slate-400 font-bold">
-                {team.members.length} / 4 MEMBERS
+                {team.members.length} / 3 MEMBERS
               </span>
             </div>
 

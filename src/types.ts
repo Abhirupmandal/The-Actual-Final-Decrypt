@@ -125,6 +125,7 @@ export interface SecurityLog {
     | 'BRUTE_FORCE_LOCKOUT'
     | 'COMPETITION_STARTED'
     | 'ADMIN_PROBE_BLOCKED'
+    | 'PATH_TRAVERSAL_ATTEMPT'
     | 'SCREENSHOT_ATTEMPT'
     | 'SYSTEM_ERROR';
   details: string;
@@ -243,7 +244,8 @@ export type AuditActionType =
   | 'ARTIFACT_INSPECTED'
   | 'DEVTOOLS_VIOLATION'
   | 'RATE_LIMIT_HIT'
-  | 'FEEDBACK_SUBMITTED';
+  | 'FEEDBACK_SUBMITTED'
+  | 'POST_EVENT_VIEWED';
 
 export interface AuditLog {
   logId: string;

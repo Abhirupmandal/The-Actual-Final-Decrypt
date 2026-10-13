@@ -52,8 +52,8 @@ export const TeamSignupSchema = z.object({
           message: 'Member names may only contain letters, numbers, and basic punctuation.',
         })
     )
-    .min(1, { message: 'At least 1 member (Team Lead) is required.' })
-    .max(4, { message: 'Maximum 4 members permitted per team.' }),
+    .min(2, { message: 'A team must have at least 2 members.' })
+    .max(3, { message: 'A team can have a maximum of 3 members.' }),
 });
 
 export const TeamLoginSchema = z.object({

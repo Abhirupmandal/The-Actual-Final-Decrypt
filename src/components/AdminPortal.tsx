@@ -40,6 +40,9 @@ import {
   Sliders,
   MessageSquareHeart,
   Star,
+  Trophy,
+  FileSpreadsheet,
+  Image as ImageIcon,
 } from 'lucide-react';
 import type {
   Challenge,
@@ -96,6 +99,9 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   // Valuable User Feedback State
   const [feedbacks, setFeedbacks] = useState<FeedbackSubmission[]>([]);
   const [feedbackSearchQuery, setFeedbackSearchQuery] = useState('');
+  const [showClearFeedbackModal, setShowClearFeedbackModal] = useState(false);
+  const [feedbackToDelete, setFeedbackToDelete] = useState<{ id: string; teamName: string } | null>(null);
+  const [isExportingJpg, setIsExportingJpg] = useState(false);
 
   // UI Notification & Confirmation Modal States
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
@@ -109,6 +115,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [showRestartModal, setShowRestartModal] = useState(false);
   const [restartDurationMinutes, setRestartDurationMinutes] = useState(120);
   const [customRestartInput, setCustomRestartInput] = useState('');
+  const [showEndCompetitionModal, setShowEndCompetitionModal] = useState(false);
 
   // Load Balancer & Redis Telemetry
   const [lbData, setLbData] = useState<{
@@ -354,7 +361,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
   // Timer Handlers - Full Authority
   const handleTimerAction = async (
-    action: 'start' | 'pause' | 'stop' | 'restart' | 'set' | 'add' | 'subtract',
+    action: 'start' | 'pause' | 'stop' | 'restart' | 'set' | 'add' | 'subtract' | 'end',
     seconds?: number
   ) => {
     playCyberBlip(800);
@@ -392,6 +399,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
           setNotification({
             type: 'info',
             text: `Subtracted ${Math.round((seconds || 0) / 60)} minutes from countdown timer.`,
+          });
+        } else if (action === 'end') {
+          setNotification({
+            type: 'success',
+            text: 'Competition officially concluded! All submissions locked and final podium calculated.',
           });
         }
       } else {
@@ -551,6 +563,315 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     } catch (e) {
       playErrorBuzz();
       setNotification({ type: 'error', text: 'Failed to export audit logs CSV.' });
+    }
+  };
+
+  // Delete Individual Feedback Submission
+  const handleConfirmDeleteFeedback = async () => {
+    if (!feedbackToDelete) return;
+    const { id, teamName } = feedbackToDelete;
+    setFeedbackToDelete(null);
+    playCyberBlip(750);
+    try {
+      const res = await fetch(`/api/admin/feedbacks/${id}`, {
+        method: 'DELETE',
+        headers: { 'x-admin-token': adminToken },
+      });
+      if (!res.ok) throw new Error('Failed to delete feedback');
+      setFeedbacks((prev) => prev.filter((f) => f.id !== id));
+      playSuccessChime();
+      setNotification({ type: 'success', text: `Feedback from Team ${teamName} deleted.` });
+    } catch (e) {
+      playErrorBuzz();
+      setNotification({ type: 'error', text: 'Failed to delete feedback entry.' });
+    }
+  };
+
+  // Clear All Feedback Submissions Across All Teams
+  const handleConfirmClearAllFeedback = async () => {
+    setShowClearFeedbackModal(false);
+    playCyberBlip(700);
+    try {
+      const res = await fetch('/api/admin/feedbacks/clear', {
+        method: 'POST',
+        headers: { 'x-admin-token': adminToken },
+      });
+      if (!res.ok) throw new Error('Failed to clear feedbacks');
+      setFeedbacks([]);
+      playSuccessChime();
+      setNotification({ type: 'success', text: 'All team feedback submissions successfully cleared.' });
+    } catch (e) {
+      playErrorBuzz();
+      setNotification({ type: 'error', text: 'Failed to clear feedbacks.' });
+    }
+  };
+
+  // Export Feedback in Excel Format (UTF-8 BOM CSV)
+  const handleExportFeedbackExcel = async () => {
+    playCyberBlip(850);
+    try {
+      const res = await fetch('/api/admin/export-feedbacks-excel', {
+        headers: { 'x-admin-token': adminToken },
+      });
+      if (!res.ok) throw new Error('Excel export failed');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `ctf_participant_feedback_${Date.now()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      playSuccessChime();
+      setNotification({ type: 'success', text: 'Feedback exported in Excel format successfully.' });
+    } catch (e) {
+      playErrorBuzz();
+      setNotification({ type: 'error', text: 'Failed to export feedback Excel.' });
+    }
+  };
+
+  // Export Feedback in JPG Format using High-Res HTML5 Canvas
+  const handleExportFeedbackJPG = () => {
+    playCyberBlip(850);
+    setIsExportingJpg(true);
+    try {
+      const canvas = document.createElement('canvas');
+      const width = 1200;
+      const cardBaseHeight = 240;
+      const headerHeight = 260;
+      const footerHeight = 80;
+      const calculatedHeight =
+        feedbacks.length === 0
+          ? 600
+          : headerHeight + feedbacks.length * cardBaseHeight + footerHeight;
+      const height = Math.min(16000, Math.max(700, calculatedHeight));
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Canvas context unavailable');
+
+      // Background Fill
+      ctx.fillStyle = '#050811';
+      ctx.fillRect(0, 0, width, height);
+
+      // Top glowing neon bar
+      const topGrad = ctx.createLinearGradient(0, 0, width, 0);
+      topGrad.addColorStop(0, '#00f0ff');
+      topGrad.addColorStop(0.5, '#ec4899');
+      topGrad.addColorStop(1, '#10b981');
+      ctx.fillStyle = topGrad;
+      ctx.fillRect(0, 0, width, 6);
+
+      // Banner Header
+      ctx.font = 'bold 24px monospace';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText('THE FINAL DECRYPT — ROUND 2: NO CLUE, NO MERCY', 40, 48);
+
+      ctx.font = 'bold 16px monospace';
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillText('OFFICIAL PARTICIPANT FEEDBACK REPORT & SQUAD REVIEWS', 40, 78);
+
+      ctx.font = '12px monospace';
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText(
+        `Generated: ${new Date().toLocaleString()}  |  Total Submissions: ${feedbacks.length} Squads  |  The Final Decrypt CTF`,
+        40,
+        102
+      );
+
+      // 4 Metric Summary Cards
+      const avgUi = feedbacks.length
+        ? (feedbacks.reduce((acc, f) => acc + f.ratingUi, 0) / feedbacks.length).toFixed(1)
+        : '5.0';
+      const avgStability = feedbacks.length
+        ? (feedbacks.reduce((acc, f) => acc + f.platformStability, 0) / feedbacks.length).toFixed(1)
+        : '5.0';
+      const avgClarity = feedbacks.length
+        ? (feedbacks.reduce((acc, f) => acc + f.clarityRulesHints, 0) / feedbacks.length).toFixed(1)
+        : '5.0';
+
+      const metrics = [
+        { title: 'TOTAL SUBMISSIONS', value: `${feedbacks.length}`, color: '#f472b6', bg: '#170b14' },
+        { title: 'AVG UI / UX RATING', value: `${avgUi} / 5.0`, color: '#22d3ee', bg: '#041724' },
+        { title: 'AVG STABILITY', value: `${avgStability} / 5.0`, color: '#34d399', bg: '#061a14' },
+        { title: 'AVG RULES CLARITY', value: `${avgClarity} / 5.0`, color: '#fbbf24', bg: '#1c1404' },
+      ];
+
+      const mWidth = (width - 80 - 36) / 4;
+      metrics.forEach((m, idx) => {
+        const mx = 40 + idx * (mWidth + 12);
+        const my = 125;
+        ctx.fillStyle = m.bg;
+        ctx.strokeStyle = m.color + '66';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if (typeof (ctx as any).roundRect === 'function') {
+          (ctx as any).roundRect(mx, my, mWidth, 80, 8);
+        } else {
+          ctx.rect(mx, my, mWidth, 80);
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.font = 'bold 10px monospace';
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillText(m.title, mx + 14, my + 26);
+
+        ctx.font = 'bold 22px monospace';
+        ctx.fillStyle = m.color;
+        ctx.fillText(m.value, mx + 14, my + 58);
+      });
+
+      // Feedback Cards List
+      let curY = 240;
+      if (feedbacks.length === 0) {
+        ctx.fillStyle = '#0b1120';
+        ctx.strokeStyle = '#1e293b';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        if (typeof (ctx as any).roundRect === 'function') {
+          (ctx as any).roundRect(40, curY, width - 80, 150, 10);
+        } else {
+          ctx.rect(40, curY, width - 80, 150);
+        }
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.font = 'bold 16px monospace';
+        ctx.fillStyle = '#64748b';
+        ctx.fillText('NO PARTICIPANT FEEDBACK SUBMISSIONS RECORDED YET', width / 2 - 240, curY + 80);
+      } else {
+        feedbacks.forEach((fb) => {
+          const cardX = 40;
+          const cardW = width - 80;
+          const cardH = cardBaseHeight - 20;
+
+          // Card Background
+          ctx.fillStyle = '#08111d';
+          ctx.strokeStyle = '#1e293b';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          if (typeof (ctx as any).roundRect === 'function') {
+            (ctx as any).roundRect(cardX, curY, cardW, cardH, 10);
+          } else {
+            ctx.rect(cardX, curY, cardW, cardH);
+          }
+          ctx.fill();
+          ctx.stroke();
+
+          // Left accent pill
+          ctx.fillStyle = '#f472b6';
+          ctx.fillRect(cardX, curY + 12, 4, 30);
+
+          // Squad name & team id
+          ctx.font = 'bold 16px monospace';
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(`Team: ${fb.teamName}`, cardX + 18, curY + 32);
+
+          ctx.font = '11px monospace';
+          ctx.fillStyle = '#64748b';
+          ctx.fillText(
+            `(ID: ${fb.teamId})`,
+            cardX + 18 + ctx.measureText(`Team: ${fb.teamName} `).width,
+            curY + 32
+          );
+
+          // Timestamp
+          const timeStr = new Date(fb.submittedAt).toLocaleString();
+          ctx.font = '11px monospace';
+          ctx.fillStyle = '#94a3b8';
+          const tW = ctx.measureText(timeStr).width;
+          ctx.fillText(timeStr, cardX + cardW - tW - 20, curY + 32);
+
+          // Ratings summary row
+          const pillY = curY + 54;
+          const ratings = [
+            `UI Design: ${fb.ratingUi}/5 ⭐`,
+            `Difficulty: ${fb.challengeDifficulty.replace('_', ' ')}`,
+            `Stability: ${fb.platformStability}/5 ⚡`,
+            `Fair Play: ${fb.fairPlaySecurity.replace('_', ' ')}`,
+            `Rules Clarity: ${fb.clarityRulesHints}/5 📖`,
+          ];
+          let rx = cardX + 18;
+          ratings.forEach((rText) => {
+            ctx.font = '10px monospace';
+            const rw = ctx.measureText(rText).width + 16;
+            ctx.fillStyle = '#040810';
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            if (typeof (ctx as any).roundRect === 'function') {
+              (ctx as any).roundRect(rx, pillY, rw, 24, 6);
+            } else {
+              ctx.rect(rx, pillY, rw, 24);
+            }
+            ctx.fill();
+            ctx.stroke();
+
+            ctx.fillStyle = '#38bdf8';
+            ctx.fillText(rText, rx + 8, pillY + 16);
+            rx += rw + 10;
+          });
+
+          // Favorite Highlight
+          ctx.font = 'bold 11px monospace';
+          ctx.fillStyle = '#06b6d4';
+          ctx.fillText('★ Favorite Challenge / Highlight:', cardX + 18, curY + 108);
+
+          ctx.font = '12px sans-serif';
+          ctx.fillStyle = '#e2e8f0';
+          const highlightText = fb.favoriteHighlight || 'None provided';
+          const truncatedHighlight =
+            highlightText.length > 150 ? highlightText.slice(0, 147) + '...' : highlightText;
+          ctx.fillText(truncatedHighlight, cardX + 18, curY + 126);
+
+          // Candid Suggestions
+          ctx.font = 'bold 11px monospace';
+          ctx.fillStyle = '#f43f5e';
+          ctx.fillText('♥ Candid Suggestions & Feedback (Honest Reply):', cardX + 18, curY + 158);
+
+          ctx.font = '12px sans-serif';
+          ctx.fillStyle = '#e2e8f0';
+          const suggText = fb.suggestionsRound3 || 'None provided';
+          const truncatedSugg =
+            suggText.length > 180 ? suggText.slice(0, 177) + '...' : suggText;
+          ctx.fillText(truncatedSugg, cardX + 18, curY + 176);
+
+          curY += cardBaseHeight;
+        });
+      }
+
+      // Footer
+      ctx.font = '10px monospace';
+      ctx.fillStyle = '#475569';
+      ctx.fillText(
+        'CONFIDENTIAL & OFFICIAL CTF TELEMETRY  •  THE FINAL DECRYPT ARCHITECTURE',
+        40,
+        height - 25
+      );
+
+      // Download as JPEG
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `ctf_participant_feedback_report_${Date.now()}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      playSuccessChime();
+      setNotification({
+        type: 'success',
+        text: 'Feedback report exported in JPG image format successfully.',
+      });
+    } catch (err) {
+      console.error('Error generating feedback JPG:', err);
+      playErrorBuzz();
+      setNotification({ type: 'error', text: 'Failed to export feedback JPG.' });
+    } finally {
+      setIsExportingJpg(false);
     }
   };
 
@@ -1130,6 +1451,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   <RotateCcw className="w-4 h-4" />
                   <span>RESTART TIMER</span>
                 </button>
+
+                {/* END COMPETITION */}
+                <button
+                  type="button"
+                  onClick={() => setShowEndCompetitionModal(true)}
+                  className="px-3.5 py-2.5 rounded-lg bg-red-600/25 text-red-300 border border-red-500/60 hover:bg-red-600/40 flex items-center justify-center gap-2 font-bold text-xs cursor-pointer shadow-[0_0_20px_rgba(239,68,68,0.25)] transition-all"
+                  title="Officially conclude competition, lock all participant submissions, and calculate final standings"
+                >
+                  <Trophy className="w-4 h-4 text-amber-400" />
+                  <span>END COMPETITION</span>
+                </button>
               </div>
             </div>
 
@@ -1191,6 +1523,13 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/40 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
                 >
                   -30 Min
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTimerAction('subtract', 3600)}
+                  className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/40 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+                >
+                  -60 Min
                 </button>
               </div>
             </div>
@@ -1596,6 +1935,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                             📎 {c.attachment.fileName} ({c.attachment.size})
                           </span>
                         )}
+                        {c.writeup && (
+                          <span className="text-[10px] font-mono font-normal px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                            📖 Writeup
+                          </span>
+                        )}
                       </div>
                       <div className="text-[10px] text-slate-400">{c.section}</div>
                     </td>
@@ -1836,7 +2180,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 <thead>
                   <tr className="bg-[#080b12] border-b border-slate-800 text-slate-400 uppercase text-[10px] tracking-wider">
                     <th className="py-3 px-4">TEAM &amp; ID</th>
-                    <th className="py-3 px-4">MEMBERS (1-4)</th>
+                    <th className="py-3 px-4">MEMBERS (2-3)</th>
                     <th className="py-3 px-4 text-center">STATUS</th>
                     <th className="py-3 px-4 text-center">SCORE / SOLVES</th>
                     <th className="py-3 px-4 text-center">WARNINGS</th>
@@ -2964,7 +3308,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             </div>
 
             {/* Controls Bar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl bg-[#080b12] border border-slate-800">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 p-4 rounded-xl bg-[#080b12] border border-slate-800">
               <div className="flex items-center gap-2">
                 <MessageSquareHeart className="w-4 h-4 text-pink-400" />
                 <h3 className="text-sm font-bold text-white tracking-wider">
@@ -2972,14 +3316,53 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 </h3>
               </div>
 
-              <div className="w-full sm:w-72">
-                <input
-                  type="text"
-                  value={feedbackSearchQuery}
-                  onChange={(e) => setFeedbackSearchQuery(e.target.value)}
-                  placeholder="Search team, favorite challenge, suggestions..."
-                  className="w-full px-3 py-1.5 rounded-lg bg-[#040810] border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-pink-400 transition-colors"
-                />
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Search Input */}
+                <div className="w-full sm:w-60">
+                  <input
+                    type="text"
+                    value={feedbackSearchQuery}
+                    onChange={(e) => setFeedbackSearchQuery(e.target.value)}
+                    placeholder="Search team, favorite, suggestions..."
+                    className="w-full px-3 py-1.5 rounded-lg bg-[#040810] border border-slate-700 text-white placeholder-slate-500 text-xs focus:outline-none focus:border-pink-400 transition-colors"
+                  />
+                </div>
+
+                {/* Export to Excel Format */}
+                <button
+                  type="button"
+                  onClick={handleExportFeedbackExcel}
+                  disabled={feedbacks.length === 0}
+                  title="Export all feedback to Excel format (.csv with UTF-8 BOM)"
+                  className="px-3 py-1.5 rounded-lg bg-emerald-950/40 hover:bg-emerald-900/60 border border-emerald-500/40 text-emerald-300 hover:text-emerald-200 text-xs font-bold transition-all flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-[0_0_10px_rgba(16,185,129,0.15)]"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>EXPORT EXCEL</span>
+                </button>
+
+                {/* Export to JPG Format */}
+                <button
+                  type="button"
+                  onClick={handleExportFeedbackJPG}
+                  disabled={isExportingJpg || feedbacks.length === 0}
+                  title="Export feedback report card as a high-resolution JPG image"
+                  className="px-3 py-1.5 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-500/40 text-cyan-300 hover:text-cyan-200 text-xs font-bold transition-all flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-[0_0_10px_rgba(6,182,212,0.15)]"
+                >
+                  <ImageIcon className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>{isExportingJpg ? 'RENDERING...' : 'EXPORT JPG'}</span>
+                </button>
+
+                {/* All Clear Button */}
+                <button
+                  type="button"
+                  onClick={() => setShowClearFeedbackModal(true)}
+                  disabled={feedbacks.length === 0}
+                  title="Permanently clear all feedback submissions from all teams"
+                  className="px-3 py-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/50 text-rose-300 hover:text-rose-200 text-xs font-bold transition-all flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-[0_0_12px_rgba(244,63,94,0.2)]"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                  <span>ALL CLEAR</span>
+                </button>
               </div>
             </div>
 
@@ -2990,7 +3373,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   key={fb.id}
                   className="p-5 rounded-2xl bg-[#08111d]/90 border border-slate-800 hover:border-slate-700 transition-all space-y-4"
                 >
-                  {/* Top Bar: Squad Name & Submission Time */}
+                  {/* Top Bar: Squad Name, Submission Time & Delete Action */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800/80">
                     <div className="flex items-center gap-2">
                       <span className="w-2.5 h-2.5 rounded-full bg-pink-400 shadow-[0_0_8px_#f472b6]" />
@@ -2998,13 +3381,26 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       <span className="text-[10px] text-slate-500">ID: {fb.teamId}</span>
                     </div>
 
-                    <div className="text-xs text-slate-400 font-mono">
-                      {new Date(fb.submittedAt).toLocaleString([], {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
+                    <div className="flex items-center gap-3">
+                      <div className="text-xs text-slate-400 font-mono">
+                        {new Date(fb.submittedAt).toLocaleString([], {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </div>
+
+                      {/* Delete Individual Feedback Button */}
+                      <button
+                        type="button"
+                        onClick={() => setFeedbackToDelete({ id: fb.id, teamName: fb.teamName })}
+                        title={`Delete feedback from Team ${fb.teamName}`}
+                        className="p-1.5 rounded-lg bg-rose-950/30 hover:bg-rose-900/60 border border-rose-500/30 hover:border-rose-500 text-rose-400 hover:text-rose-200 transition-colors cursor-pointer flex items-center gap-1 text-[11px]"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span className="font-bold">Delete</span>
+                      </button>
                     </div>
                   </div>
 
@@ -3056,7 +3452,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     <div className="p-3.5 rounded-xl bg-[#140810] border border-rose-500/30 text-xs">
                       <div className="text-[10px] text-rose-400 font-bold uppercase tracking-wider mb-1 flex items-center gap-1.5">
                         <MessageSquareHeart className="w-3.5 h-3.5" />
-                        <span>7. Candid Suggestions for Round 3 (Honest Reply):</span>
+                        <span>7. Candid Suggestions & Improvements (Honest Reply):</span>
                       </div>
                       <p className="text-slate-200 font-sans leading-relaxed whitespace-pre-wrap">
                         {fb.suggestionsRound3}
@@ -3448,6 +3844,59 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 )}
               </div>
 
+              {/* Official Solution & Writeup */}
+              <div className="space-y-2 pt-3 border-t border-slate-800">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-cyan-400 flex items-center gap-1.5">
+                    <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Official Solution &amp; Writeup (Released when Writeup Mode is ON)</span>
+                  </label>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
+                    {editingChallenge.writeup ? 'Configured ✓' : 'Empty'}
+                  </span>
+                </div>
+
+                <div>
+                  <span className="text-[10px] text-slate-400 block mb-1">Executive Summary / Solution Explanation:</span>
+                  <textarea
+                    value={editingChallenge.writeup?.summary || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setEditingChallenge({
+                        ...editingChallenge,
+                        writeup: {
+                          summary: val,
+                          steps: editingChallenge.writeup?.steps || [],
+                        },
+                      });
+                    }}
+                    rows={2}
+                    className="w-full bg-[#050811] border border-slate-700 focus:border-cyan-500 rounded p-2 text-xs text-white placeholder-slate-600 focus:outline-none"
+                    placeholder="Official walkthrough executive summary..."
+                  />
+                </div>
+
+                <div>
+                  <span className="text-[10px] text-slate-400 block mb-1">Step-by-Step Exploitation Steps (One per line):</span>
+                  <textarea
+                    value={(editingChallenge.writeup?.steps || []).join('\n')}
+                    onChange={(e) => {
+                      const lines = e.target.value.split('\n');
+                      setEditingChallenge({
+                        ...editingChallenge,
+                        writeup: {
+                          summary: editingChallenge.writeup?.summary || '',
+                          steps: lines,
+                        },
+                      });
+                    }}
+                    rows={3}
+                    className="w-full bg-[#050811] border border-slate-700 focus:border-cyan-500 rounded p-2 text-xs text-white placeholder-slate-600 focus:outline-none font-mono"
+                    placeholder="1. Step one...\n2. Step two...\n3. Recover flag..."
+                  />
+                </div>
+              </div>
+
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
                 <button
                   type="button"
@@ -3510,6 +3959,45 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   Apply Delta
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal: End Competition */}
+      {showEndCompetitionModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+          <div className="bg-[#0d111a] border-2 border-red-500/70 rounded-xl p-6 max-w-md w-full font-mono text-xs shadow-2xl">
+            <div className="flex items-center gap-2 text-red-400 font-bold text-sm mb-2">
+              <Trophy className="w-5 h-5 text-amber-400 animate-bounce" />
+              <span>OFFICIALLY CONCLUDE COMPETITION</span>
+            </div>
+            <p className="text-slate-300 font-sans text-xs leading-relaxed mb-3">
+              Are you sure you want to officially end the tournament? This action will immediately:
+            </p>
+            <ul className="text-slate-300 font-sans text-xs space-y-1.5 list-disc list-inside mb-4 bg-slate-900/80 p-3 rounded-lg border border-slate-800">
+              <li>Lock all flag submissions across all participant screens</li>
+              <li>Auto-calculate final points and resolve unbiased tie-breakers</li>
+              <li>Display the Top 3 Winners Victory Ceremony across all participant screens</li>
+              <li>Hide challenges and transition students to the Tournament Completed dashboard</li>
+            </ul>
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+              <button
+                onClick={() => setShowEndCompetitionModal(false)}
+                className="px-4 py-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowEndCompetitionModal(false);
+                  handleTimerAction('end');
+                }}
+                className="px-4 py-2 rounded bg-red-600 hover:bg-red-500 text-white font-bold shadow-[0_0_20px_rgba(239,68,68,0.5)] flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trophy className="w-4 h-4 text-amber-300" />
+                <span>Confirm End Competition</span>
+              </button>
             </div>
           </div>
         </div>
@@ -3744,6 +4232,72 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>CONFIRM & RESTART NOW</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal: Delete Individual Feedback */}
+      {feedbackToDelete && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+          <div className="bg-[#0d111a] border-2 border-red-500/50 rounded-xl p-6 max-w-sm w-full font-mono text-xs shadow-2xl">
+            <div className="flex items-center gap-2 text-red-400 font-bold text-sm mb-2">
+              <Trash2 className="w-4 h-4 text-red-400" />
+              <span>DELETE FEEDBACK SUBMISSION</span>
+            </div>
+            <p className="text-slate-300 text-xs mb-4">
+              Are you sure you want to delete feedback from <strong className="text-white">Team {feedbackToDelete.teamName}</strong>? This action cannot be undone.
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setFeedbackToDelete(null)}
+                className="px-3 py-1.5 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteFeedback}
+                className="px-3 py-1.5 rounded bg-red-600 hover:bg-red-500 text-white font-bold transition-colors cursor-pointer shadow-[0_0_10px_rgba(239,68,68,0.4)]"
+              >
+                Delete Feedback
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal: Clear All Feedback */}
+      {showClearFeedbackModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+          <div className="bg-[#0d111a] border-2 border-rose-500/60 rounded-xl p-6 max-w-md w-full font-mono text-xs shadow-2xl space-y-3">
+            <div className="flex items-center gap-2 text-rose-400 font-bold text-sm">
+              <AlertTriangle className="w-5 h-5 text-rose-400 animate-pulse" />
+              <span>CLEAR ALL TEAM FEEDBACK</span>
+            </div>
+            <p className="text-slate-300 text-xs leading-relaxed">
+              WARNING: This action will permanently erase all <strong className="text-white">{feedbacks.length}</strong> feedback submissions submitted by participants.
+            </p>
+            <div className="bg-rose-950/20 border border-rose-500/30 rounded p-2.5 text-[11px] text-rose-300">
+              All feedback scores, suggestions, and team reviews will be completely cleared from the system.
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowClearFeedbackModal(false)}
+                className="px-3.5 py-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmClearAllFeedback}
+                className="px-4 py-2 rounded bg-rose-600 hover:bg-rose-500 text-white font-bold transition-colors cursor-pointer shadow-[0_0_15px_rgba(244,63,94,0.4)] flex items-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Confirm All Clear</span>
               </button>
             </div>
           </div>

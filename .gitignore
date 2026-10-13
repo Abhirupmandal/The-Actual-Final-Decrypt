@@ -13,6 +13,6 @@ data/*.sqlite*
 data/*.key
 data/*.tmp*
 data/*.json
-
-
-
+ORGANIZER_ANSWER_KEY.md
+*load_test*.py
+clean_loadtest_teams.py

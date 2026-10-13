@@ -26,9 +26,82 @@ import { SecurityGuard } from './components/SecurityGuard.tsx';
 import { StrikeWarningBanner } from './components/StrikeWarningBanner.tsx';
 import { DisqualificationScreen } from './components/DisqualificationScreen.tsx';
 import { BinaryRainBackground } from './components/BinaryRainBackground.tsx';
+import { TopThreePodiumModal } from './components/TopThreePodiumModal.tsx';
+import { CompetitionEndedDashboard } from './components/CompetitionEndedDashboard.tsx';
 import { playSuccessChime, playCyberBlip } from './utils/audio.ts';
-import { Maximize2, Heart } from 'lucide-react';
+import { Maximize2, Heart, Lock, ArrowRight, UserPlus, BookOpen, Trophy } from 'lucide-react';
 import { requestAppFullscreen, isAppFullscreen } from './utils/fullscreen.ts';
+
+function GuestRestrictedTabCard({
+  title,
+  description,
+  onOpenAuthModal,
+  onNavigateToRules,
+  onNavigateToLeaderboard,
+}: {
+  title: string;
+  description: string;
+  onOpenAuthModal: () => void;
+  onNavigateToRules: () => void;
+  onNavigateToLeaderboard: () => void;
+}) {
+  return (
+    <div className="max-w-xl mx-auto my-12 p-6 sm:p-10 rounded-3xl bg-[#080e18]/90 border border-slate-800 text-center font-mono space-y-5 shadow-[0_0_50px_rgba(0,255,65,0.1)] animate-fadeIn relative overflow-hidden backdrop-blur-xl">
+      <div className="absolute top-0 left-1/4 right-1/4 h-1 bg-gradient-to-r from-transparent via-[#00ff41] to-transparent shadow-[0_0_20px_#00ff41]" />
+
+      <div className="w-16 h-16 mx-auto rounded-2xl bg-[#00ff41]/10 border border-[#00ff41]/40 flex items-center justify-center text-[#00ff41] shadow-[0_0_25px_rgba(0,255,65,0.2)]">
+        <Lock className="w-8 h-8" />
+      </div>
+
+      <div className="space-y-2">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#00ff41]/10 border border-[#00ff41]/30 text-[#00ff41] text-[10px] font-bold uppercase tracking-widest">
+          <span>SQUAD AUTHENTICATION REQUIRED</span>
+        </div>
+        <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight">
+          {title}
+        </h2>
+        <p className="text-xs sm:text-sm text-slate-300 font-sans max-w-md mx-auto leading-relaxed">
+          {description}
+        </p>
+      </div>
+
+      <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+        <button
+          onClick={() => {
+            playCyberBlip(800);
+            onOpenAuthModal();
+          }}
+          className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#00ff41] hover:bg-[#00ff41]/90 text-black font-black uppercase text-xs tracking-wider shadow-[0_0_25px_rgba(0,255,65,0.4)] transition-all cursor-pointer inline-flex items-center justify-center gap-2"
+        >
+          <UserPlus className="w-4 h-4 text-black" />
+          <span>SIGN UP / LOG IN SQUAD</span>
+        </button>
+
+        <button
+          onClick={() => {
+            playCyberBlip(750);
+            onNavigateToRules();
+          }}
+          className="w-full sm:w-auto px-5 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-bold uppercase text-xs tracking-wider transition-all cursor-pointer inline-flex items-center justify-center gap-2"
+        >
+          <BookOpen className="w-4 h-4 text-[#00ff41]" />
+          <span>RULES & INFO</span>
+        </button>
+
+        <button
+          onClick={() => {
+            playCyberBlip(750);
+            onNavigateToLeaderboard();
+          }}
+          className="w-full sm:w-auto px-5 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-bold uppercase text-xs tracking-wider transition-all cursor-pointer inline-flex items-center justify-center gap-2"
+        >
+          <Trophy className="w-4 h-4 text-amber-400" />
+          <span>LEADERBOARD</span>
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -36,6 +109,19 @@ export default function App() {
 
   // Application Views
   const [currentTab, setCurrentTab] = useState<AppTab>('challenges');
+
+  // Mandatory Post-Event Feedback Submission Gate
+  const [hasSubmittedFeedback, setHasSubmittedFeedback] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('ctf_feedback_submitted') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  // Victory Ceremony & Final Podium Modal
+  const [showVictoryModal, setShowVictoryModal] = useState(false);
+  const [topThreeData, setTopThreeData] = useState<LeaderboardEntry[]>([]);
 
   // Competition State
   const [competitionState, setCompetitionState] = useState<CompetitionState>({
@@ -104,6 +190,13 @@ export default function App() {
   const [activeAnnouncement, setActiveAnnouncement] = useState<any>(null);
   const [activeWriteupChallenge, setActiveWriteupChallenge] = useState<PublicChallengeView | null>(null);
   const [activeArtifactChallengeId, setActiveArtifactChallengeId] = useState<string | null>(null);
+
+  // Auto-close writeup modal on user side when admin locks writeups
+  useEffect(() => {
+    if (!competitionState.writeupMode) {
+      setActiveWriteupChallenge(null);
+    }
+  }, [competitionState.writeupMode]);
 
   // Standalone Artifact Viewer Tab Routing (/viewer/:challengeId)
   const [standaloneViewerChallengeId, setStandaloneViewerChallengeId] = useState<string | null>(() => {
@@ -202,6 +295,15 @@ export default function App() {
         if (typeof data.hasDemoTeams === 'boolean') {
           setHasDemoTeams(data.hasDemoTeams);
         }
+        if (data.competitionState?.status === 'ended' && data.leaderboard) {
+          const top3 = data.leaderboard.slice(0, 3);
+          setTopThreeData(top3);
+          const shown = sessionStorage.getItem('ctf_podium_shown');
+          if (shown !== 'true') {
+            setShowVictoryModal(true);
+            sessionStorage.setItem('ctf_podium_shown', 'true');
+          }
+        }
         if (data.team) {
           setTeam(data.team);
           try {
@@ -240,10 +342,47 @@ export default function App() {
         } else {
           setActiveAnnouncement(null);
         }
+
+        // Check if current participant has already submitted feedback
+        if (token) {
+          fetch('/api/feedback/my', { headers })
+            .then((r) => r.json())
+            .then((d) => {
+              if (d?.feedback) {
+                setHasSubmittedFeedback(true);
+                try {
+                  localStorage.setItem('ctf_feedback_submitted', 'true');
+                } catch {}
+              }
+            })
+            .catch(() => {});
+        }
       }
     } catch (err) {
       console.error('Failed to sync initial state:', err);
     }
+  }, []);
+
+  const handleFeedbackSubmittedSuccess = useCallback(() => {
+    setHasSubmittedFeedback(true);
+    try {
+      localStorage.setItem('ctf_feedback_submitted', 'true');
+    } catch {}
+  }, []);
+
+  const handleUnlockAndShowDashboard = useCallback(() => {
+    setHasSubmittedFeedback(true);
+    try {
+      localStorage.setItem('ctf_feedback_submitted', 'true');
+    } catch {}
+    setCurrentTab('leaderboard');
+    const token = localStorage.getItem('ctf_team_token');
+    fetch('/api/post-event/viewed', {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    }).catch(() => {});
   }, []);
 
   // Unified Admin Session Detection: Administrators are officials and must NEVER be proctored or warned
@@ -288,22 +427,50 @@ export default function App() {
     });
 
     s.on('state_update', (data) => {
-      if (data.competitionState) setCompetitionState(data.competitionState);
+      if (data.competitionState) {
+        setCompetitionState(data.competitionState);
+        if (!data.competitionState.writeupMode) {
+          setActiveWriteupChallenge(null);
+        }
+      }
       if (data.challenges && Array.isArray(data.challenges)) setChallenges(data.challenges);
       if (data.leaderboard) setLeaderboard(data.leaderboard);
     });
 
+    s.on('writeup_mode_changed', (payload: { writeupMode: boolean }) => {
+      setCompetitionState((prev) => ({ ...prev, writeupMode: payload.writeupMode }));
+      if (!payload.writeupMode) {
+        setActiveWriteupChallenge(null);
+        setChallenges((prev) => prev.map((c) => ({ ...c, writeup: undefined })));
+      }
+      fetchState();
+    });
+
     s.on('timer_tick', (tick) => {
-      setCompetitionState((prev) => ({
-        ...prev,
-        status: tick.status,
-        remainingSeconds: tick.remainingSeconds,
-        writeupMode: tick.writeupMode,
-      }));
+      setCompetitionState((prev) => {
+        const nextMode = tick.writeupMode ?? prev.writeupMode;
+        if (!nextMode) {
+          setActiveWriteupChallenge(null);
+        }
+        return {
+          ...prev,
+          status: tick.status,
+          remainingSeconds: tick.remainingSeconds,
+          writeupMode: nextMode,
+        };
+      });
     });
 
     s.on('leaderboard_update', (newLeaderboard: LeaderboardEntry[]) => {
       setLeaderboard(newLeaderboard);
+    });
+
+    s.on('competition_ended', (data: { top3?: LeaderboardEntry[]; finalStandings?: LeaderboardEntry[] }) => {
+      if (data?.finalStandings) setLeaderboard(data.finalStandings);
+      if (data?.top3) setTopThreeData(data.top3);
+      setShowVictoryModal(true);
+      fetchState();
+      playSuccessChime();
     });
 
     s.on('activity_event', (event: ActivityFeedEvent) => {
@@ -667,7 +834,30 @@ export default function App() {
           <>
             {currentTab === 'challenges' && (
               <>
-                {!team ? (
+                {competitionState.status === 'ended' ? (
+                  !hasSubmittedFeedback && !adminToken ? (
+                    <FeedbackSection
+                      team={team}
+                      isMandatoryIntermission={true}
+                      onOpenAuthModal={() => setIsAuthModalOpen(true)}
+                      onUnlockFinalDashboard={handleUnlockAndShowDashboard}
+                      onFeedbackSubmitted={handleFeedbackSubmittedSuccess}
+                    />
+                  ) : (
+                    <CompetitionEndedDashboard
+                      leaderboard={leaderboard}
+                      currentTeam={team}
+                      writeupMode={Boolean(competitionState.writeupMode)}
+                      onOpenWriteupPortal={() => {
+                        if (!competitionState.writeupMode) return;
+                        const available = challenges.filter((c) => Boolean(c.writeup));
+                        if (available.length > 0) {
+                          setActiveWriteupChallenge(available[0]);
+                        }
+                      }}
+                    />
+                  )
+                ) : !team ? (
                   /* Primary Entry: Registration & Signup Portal First */
                   <LandingPortal
                     onSuccess={handleTeamLoginSuccess}
@@ -683,6 +873,8 @@ export default function App() {
                     totalPointsPool={challenges.reduce((acc, c) => acc + c.points, 0)}
                     remainingSeconds={competitionState.remainingSeconds}
                     onConfirmReady={handleConfirmReady}
+                    onNavigateToChallenges={() => setCurrentTab('challenges')}
+                    onOpenAuthModal={() => setIsAuthModalOpen(true)}
                   />
                 ) : (
                   /* Challenge Marketplace: Active Only After [ READY TO START ] */
@@ -708,54 +900,125 @@ export default function App() {
                 hasStarted={Boolean(team?.hasStarted || isReadyToStart)}
                 onConfirmReady={handleConfirmReady}
                 onNavigateToChallenges={() => setCurrentTab('challenges')}
+                onOpenAuthModal={() => setIsAuthModalOpen(true)}
               />
             )}
 
             {currentTab === 'leaderboard' && (
-              <Leaderboard
-                entries={leaderboard}
-                currentTeamId={team?.id}
-                hasDemoTeams={hasDemoTeams}
-                isAdmin={Boolean(adminToken)}
-                onToggleDemoMode={async (mode) => {
-                  const res = await fetch('/api/scoreboard/mode', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      ...(adminToken ? { 'x-admin-token': adminToken } : {}),
-                    },
-                    body: JSON.stringify({ mode }),
-                  });
-                  if (res.ok) {
-                    const data = await res.json();
-                    setLeaderboard(data.leaderboard);
-                    setHasDemoTeams(data.hasDemoTeams);
-                    fetchState();
-                  }
-                }}
-                onOpenAuthModal={() => setIsAuthModalOpen(true)}
-              />
+              competitionState.status === 'ended' && !hasSubmittedFeedback && !adminToken ? (
+                <div className="max-w-2xl mx-auto my-12 p-6 sm:p-10 rounded-2xl bg-gradient-to-b from-[#140e06] via-[#0b0e18] to-[#04060c] border-2 border-amber-500/70 text-center font-mono space-y-4 shadow-[0_0_50px_rgba(245,158,11,0.25)] animate-fadeIn">
+                  <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-500/20 border border-amber-500/60 flex items-center justify-center text-amber-400">
+                    <Lock className="w-7 h-7" />
+                  </div>
+                  <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-wider">
+                    FINAL LEADERBOARD LOCKED // FEEDBACK REQUIRED
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-300 font-sans max-w-lg mx-auto leading-relaxed">
+                    The competition has officially concluded! To access the official final scoreboard and challenge writeups, all participants must submit the mandatory post-event feedback debrief.
+                  </p>
+                  <button
+                    onClick={() => {
+                      playCyberBlip(800);
+                      setCurrentTab('feedback');
+                    }}
+                    className="px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-black font-black uppercase text-xs tracking-wider shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all cursor-pointer inline-flex items-center gap-2"
+                  >
+                    <span>COMPLETE MANDATORY FEEDBACK TO UNLOCK</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : competitionState.status === 'ended' ? (
+                <CompetitionEndedDashboard
+                  leaderboard={leaderboard}
+                  currentTeam={team}
+                  writeupMode={Boolean(competitionState.writeupMode)}
+                  onOpenWriteupPortal={() => {
+                    if (!competitionState.writeupMode) return;
+                    const available = challenges.filter((c) => Boolean(c.writeup));
+                    if (available.length > 0) {
+                      setActiveWriteupChallenge(available[0]);
+                    }
+                  }}
+                />
+              ) : (
+                <Leaderboard
+                  entries={leaderboard}
+                  currentTeamId={team?.id}
+                  hasDemoTeams={hasDemoTeams}
+                  isAdmin={Boolean(adminToken)}
+                  onToggleDemoMode={async (mode) => {
+                    const res = await fetch('/api/scoreboard/mode', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        ...(adminToken ? { 'x-admin-token': adminToken } : {}),
+                      },
+                      body: JSON.stringify({ mode }),
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      setLeaderboard(data.leaderboard);
+                      setHasDemoTeams(data.hasDemoTeams);
+                      fetchState();
+                    }
+                  }}
+                  onOpenAuthModal={() => setIsAuthModalOpen(true)}
+                />
+              )
             )}
 
             {currentTab === 'activity' && (
-              <ActivityFeed events={activityFeed} />
+              !team && !adminToken ? (
+                <GuestRestrictedTabCard
+                  title="LIVE FEED // SQUAD LOGIN REQUIRED"
+                  description="Real-time decrypt alerts, activity feeds, and tournament solve streams are exclusive to registered participating squads and competition arbitrators."
+                  onOpenAuthModal={() => setIsAuthModalOpen(true)}
+                  onNavigateToRules={() => setCurrentTab('rules')}
+                  onNavigateToLeaderboard={() => setCurrentTab('leaderboard')}
+                />
+              ) : (
+                <ActivityFeed events={activityFeed} />
+              )
             )}
 
             {currentTab === 'feedback' && (
-              <FeedbackSection
-                team={team}
-                onOpenAuthModal={() => setIsAuthModalOpen(true)}
-              />
+              !team && !adminToken ? (
+                <GuestRestrictedTabCard
+                  title="FEEDBACK PORTAL // SQUAD LOGIN REQUIRED"
+                  description="Competition feedback evaluations are linked to registered participating squads. Please register your squad or sign in to share your tournament experience."
+                  onOpenAuthModal={() => setIsAuthModalOpen(true)}
+                  onNavigateToRules={() => setCurrentTab('rules')}
+                  onNavigateToLeaderboard={() => setCurrentTab('leaderboard')}
+                />
+              ) : (
+                <FeedbackSection
+                  team={team}
+                  isMandatoryIntermission={competitionState.status === 'ended' && !hasSubmittedFeedback && !adminToken}
+                  onOpenAuthModal={() => setIsAuthModalOpen(true)}
+                  onUnlockFinalDashboard={handleUnlockAndShowDashboard}
+                  onFeedbackSubmitted={handleFeedbackSubmittedSuccess}
+                />
+              )
             )}
 
             {currentTab === 'profile' && (
-              <ProfileView
-                team={team}
-                challenges={challenges}
-                leaderboard={leaderboard}
-                onOpenAuthModal={() => setIsAuthModalOpen(true)}
-                onLogoutTeam={handleTeamLogout}
-              />
+              !team && !adminToken ? (
+                <GuestRestrictedTabCard
+                  title="SQUAD PROFILE // SQUAD LOGIN REQUIRED"
+                  description="Please sign in or register your competing team to access your squad stats, decrypted flags, and token settings."
+                  onOpenAuthModal={() => setIsAuthModalOpen(true)}
+                  onNavigateToRules={() => setCurrentTab('rules')}
+                  onNavigateToLeaderboard={() => setCurrentTab('leaderboard')}
+                />
+              ) : (
+                <ProfileView
+                  team={team}
+                  challenges={challenges}
+                  leaderboard={leaderboard}
+                  onOpenAuthModal={() => setIsAuthModalOpen(true)}
+                  onLogoutTeam={handleTeamLogout}
+                />
+              )
             )}
 
             {currentTab === 'admin' && adminToken && (
@@ -823,10 +1086,15 @@ export default function App() {
         onDismiss={handleDismissAnnouncement}
       />
 
-      <WriteupModal
-        challenge={activeWriteupChallenge}
-        onClose={() => setActiveWriteupChallenge(null)}
-      />
+      {Boolean(competitionState.writeupMode && activeWriteupChallenge) && (
+        <WriteupModal
+          isOpen={Boolean(competitionState.writeupMode && activeWriteupChallenge)}
+          challenge={activeWriteupChallenge}
+          challenges={challenges.filter((c) => Boolean(c.writeup))}
+          onSelectChallenge={(c) => setActiveWriteupChallenge(c)}
+          onClose={() => setActiveWriteupChallenge(null)}
+        />
+      )}
 
       {/* Interactive In-Browser Artifact Display System */}
       <ArtifactViewerModal
@@ -851,6 +1119,23 @@ export default function App() {
           onLogout={handleTeamLogout}
         />
       )}
+
+      {/* Victory Podium Modal on Competition End */}
+      <TopThreePodiumModal
+        isOpen={showVictoryModal}
+        onClose={() => setShowVictoryModal(false)}
+        top3={topThreeData.length > 0 ? topThreeData : leaderboard.slice(0, 3)}
+        totalTeams={leaderboard.length}
+        hasSubmittedFeedback={hasSubmittedFeedback}
+        onViewDashboard={() => {
+          setShowVictoryModal(false);
+          if (!hasSubmittedFeedback && !adminToken) {
+            setCurrentTab('feedback');
+          } else {
+            handleUnlockAndShowDashboard();
+          }
+        }}
+      />
     </div>
   );
 }

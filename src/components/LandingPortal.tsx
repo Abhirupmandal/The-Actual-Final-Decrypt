@@ -39,7 +39,7 @@ export const LandingPortal: React.FC<LandingPortalProps> = ({
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
   const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
-  const [members, setMembers] = useState<string[]>(['']);
+  const [members, setMembers] = useState<string[]>(['', '']);
 
   // Login Form State
   const [loginTeamName, setLoginTeamName] = useState('');
@@ -70,14 +70,14 @@ export const LandingPortal: React.FC<LandingPortalProps> = ({
   const strength = getPasswordStrength(signupPassword);
 
   const handleAddMember = () => {
-    if (members.length < 4) {
+    if (members.length < 3) {
       playCyberBlip(750);
       setMembers([...members, '']);
     }
   };
 
   const handleRemoveMember = (idx: number) => {
-    if (members.length > 1) {
+    if (members.length > 2) {
       playCyberBlip(600);
       setMembers(members.filter((_, i) => i !== idx));
     }
@@ -125,8 +125,13 @@ export const LandingPortal: React.FC<LandingPortalProps> = ({
     }
 
     const validMembers = members.map((m) => m.trim()).filter((m) => m.length > 0);
-    if (validMembers.length === 0) {
-      setError('Team Lead name is required.');
+    if (validMembers.length < 2) {
+      setError('A team must have at least 2 members.');
+      playErrorBuzz();
+      return;
+    }
+    if (validMembers.length > 3) {
+      setError('A team can have a maximum of 3 members.');
       playErrorBuzz();
       return;
     }
@@ -256,10 +261,10 @@ export const LandingPortal: React.FC<LandingPortalProps> = ({
             <div className="p-3.5 rounded-xl bg-[#0d111a]/90 border border-slate-800">
               <div className="text-[#00f0ff] font-bold flex items-center gap-1.5">
                 <Users className="w-4 h-4" />
-                <span>1-4 Team Members</span>
+                <span>2-3 Team Members</span>
               </div>
               <p className="text-[11px] text-slate-400 mt-1 font-sans">
-                Compete solo or collaborate with up to 4 members.
+                Collaborate in squads of 2 to 3 members.
               </p>
             </div>
 
@@ -444,10 +449,10 @@ export const LandingPortal: React.FC<LandingPortalProps> = ({
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-slate-300 font-bold text-xs flex items-center gap-1">
                       <Users className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>TEAM MEMBERS ({members.length}/4 MAX)</span>
+                      <span>TEAM MEMBERS ({members.length}/3 MAX)</span>
                     </label>
 
-                    {members.length < 4 && (
+                    {members.length < 3 && (
                       <button
                         type="button"
                         onClick={handleAddMember}
@@ -464,13 +469,13 @@ export const LandingPortal: React.FC<LandingPortalProps> = ({
                       <div key={idx} className="flex gap-2">
                         <input
                           type="text"
-                          required={idx === 0}
+                          required={idx < 2}
                           value={member}
                           onChange={(e) => handleMemberChange(idx, e.target.value)}
-                          placeholder={idx === 0 ? 'Member 1 (Team Leader) *' : `Member ${idx + 1}`}
+                          placeholder={idx === 0 ? 'Member 1 (Team Leader) *' : idx === 1 ? 'Member 2 (Required) *' : 'Member 3 (Optional)'}
                           className="flex-1 bg-[#080b12] border border-slate-700 focus:border-[#00ff66] rounded-xl px-3 py-2 text-xs text-white outline-none"
                         />
-                        {members.length > 1 && (
+                        {members.length > 2 && (
                           <button
                             type="button"
                             onClick={() => handleRemoveMember(idx)}

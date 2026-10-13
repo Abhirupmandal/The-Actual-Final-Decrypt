@@ -84,10 +84,11 @@ export function verifySignedToken(token: string): { valid: boolean; payload?: Se
     .update(payloadString)
     .digest('hex');
 
-  const sigBuffer = Buffer.from(signature);
-  const expectedBuffer = Buffer.from(expectedSignature);
+  // Constant-time HMAC comparison using uniform 32-byte digests to prevent timing attacks
+  const sigHash = crypto.createHash('sha256').update(signature).digest();
+  const expectedHash = crypto.createHash('sha256').update(expectedSignature).digest();
 
-  if (sigBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
+  if (!crypto.timingSafeEqual(sigHash, expectedHash) || signature.length !== expectedSignature.length) {
     return { valid: false, error: 'Cryptographic signature mismatch (tampered token)' };
   }
 

@@ -75,8 +75,16 @@ export const Header: React.FC<HeaderProps> = ({
     if (!next) playCyberBlip(1000);
   };
 
+  const isGuest = !team && !isAdminAuthenticated;
+  const isTabLocked = (tabId: AppTab) => isGuest && (tabId === 'activity' || tabId === 'feedback' || tabId === 'profile');
+
   const handleTabClick = (tab: AppTab) => {
     playCyberBlip(750);
+    if (isTabLocked(tab)) {
+      setMobileMenuOpen(false);
+      onOpenAuthModal();
+      return;
+    }
     setCurrentTab(tab);
     setMobileMenuOpen(false);
   };
@@ -117,11 +125,9 @@ export const Header: React.FC<HeaderProps> = ({
       );
     }
     return (
-      <span className="px-2 py-1 rounded-lg text-[10px] font-mono font-bold bg-[#08121d] text-slate-400 border border-slate-800 flex items-center gap-1 shrink-0">
+      <span className="hidden xl:flex px-2 py-1 rounded-lg text-[10px] font-mono font-bold bg-[#08121d] text-slate-400 border border-slate-800 items-center gap-1 shrink-0">
         <span className="w-1.5 h-1.5 rounded-full bg-[#00ff41]" />
-        <span className="hidden sm:inline">WARNINGS: </span>
-        <span className="sm:hidden">WRN: </span>
-        <span>0</span>
+        <span>WRN: 0</span>
       </span>
     );
   };
@@ -154,23 +160,23 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center justify-between h-16 sm:h-18 gap-2">
           
           {/* ================= COLUMN 1 (LEFT): BRANDING LOGO & TITLE ================= */}
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2.5 shrink-0">
             <button
               onClick={() => handleTabClick('challenges')}
-              className="flex items-center gap-2.5 group text-left cursor-pointer transition-transform duration-200 hover:scale-[1.02]"
+              className="flex items-center gap-2 group text-left cursor-pointer transition-transform duration-200 hover:scale-[1.02]"
               title="The Final Decrypt"
             >
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#050e18]/90 border border-[#00ff41]/50 flex items-center justify-center text-[#00ff41] shadow-[0_0_15px_rgba(0,255,65,0.3)] group-hover:border-[#00ff41] group-hover:shadow-[0_0_20px_rgba(0,255,65,0.55)] transition-all">
-                <Terminal className="w-4 h-4 sm:w-5 sm:h-5 text-[#00ff41]" />
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-[#050e18]/90 border border-[#00ff41]/50 flex items-center justify-center text-[#00ff41] shadow-[0_0_12px_rgba(0,255,65,0.3)] group-hover:border-[#00ff41] group-hover:shadow-[0_0_20px_rgba(0,255,65,0.55)] transition-all shrink-0">
+                <Terminal className="w-4 h-4 text-[#00ff41]" />
               </div>
-              <div>
-                <div className="font-mono font-black text-sm sm:text-base tracking-wider text-white flex items-center gap-1.5 drop-shadow-[0_0_12px_rgba(0,255,65,0.6)]">
+              <div className="min-w-0">
+                <div className="font-mono font-black text-xs sm:text-sm tracking-wider text-white flex items-center gap-1 drop-shadow-[0_0_10px_rgba(0,255,65,0.5)]">
                   <span className="text-[#00ff41] animate-pulse">&gt;</span>
-                  <span className="bg-gradient-to-r from-white via-slate-100 to-[#e2e8f0] bg-clip-text text-transparent">
+                  <span className="bg-gradient-to-r from-white via-slate-100 to-[#e2e8f0] bg-clip-text text-transparent truncate">
                     THE FINAL DECRYPT
                   </span>
                 </div>
-                <div className="text-[10px] font-mono text-slate-400 tracking-wider flex items-center gap-1.5">
+                <div className="text-[9px] sm:text-[10px] font-mono text-slate-400 tracking-wider hidden sm:flex items-center gap-1.5">
                   <span className="text-[#00f0ff] font-bold">ROUND 2:</span>
                   <span>NO CLUE, NO MERCY</span>
                 </div>
@@ -179,24 +185,30 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
 
           {/* ================= COLUMN 2 (CENTER): CENTERED NAVIGATION TABS ================= */}
-          <nav className="hidden lg:flex items-center justify-center shrink-0">
-            <div className="flex items-center gap-0.5 xl:gap-1 p-0.5 xl:p-1 rounded-xl bg-[#040a12]/90 border border-slate-800/90 backdrop-blur-md shadow-inner">
+          <nav className="hidden xl:flex items-center justify-center shrink-0">
+            <div className="flex items-center gap-0.5 2xl:gap-1 p-0.5 2xl:p-1 rounded-xl bg-[#040a12]/90 border border-slate-800/90 backdrop-blur-md shadow-inner">
               {navTabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = currentTab === tab.id;
+                const locked = isTabLocked(tab.id);
                 return (
                   <button
                     key={tab.id}
                     onClick={() => handleTabClick(tab.id)}
-                    className={`px-2 xl:px-2.5 py-1.5 rounded-lg font-mono text-[11px] xl:text-xs font-bold transition-all duration-200 flex items-center gap-1 xl:gap-1.5 cursor-pointer whitespace-nowrap ${
+                    title={locked ? `${tab.label} (Sign in / register to unlock)` : undefined}
+                    className={`px-2 2xl:px-2.5 py-1.5 rounded-lg font-mono text-[11px] 2xl:text-xs font-bold transition-all duration-200 flex items-center gap-1 2xl:gap-1.5 cursor-pointer whitespace-nowrap ${
                       isActive
                         ? 'text-[#00ff41] bg-[#00ff41]/15 border border-[#00ff41]/60 shadow-[0_0_12px_rgba(0,255,65,0.3)]'
+                        : locked
+                        ? 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/40 border border-transparent'
                         : 'text-slate-400 hover:text-[#00ff41] hover:bg-[#00ff41]/10 border border-transparent'
                     }`}
                   >
-                    <Icon className="w-3.5 h-3.5 shrink-0" />
-                    <span className="hidden xl:inline">{tab.label}</span>
-                    <span className="xl:hidden">{tab.shortLabel}</span>
+                    <Icon className={`w-3.5 h-3.5 shrink-0 ${locked ? 'text-slate-500' : ''}`} />
+                    <span>{tab.label}</span>
+                    {locked && (
+                      <Lock className="w-2.5 h-2.5 text-slate-500 shrink-0" />
+                    )}
                   </button>
                 );
               })}
@@ -205,7 +217,7 @@ export const Header: React.FC<HeaderProps> = ({
               {isAdminAuthenticated && (
                 <button
                   onClick={() => handleTabClick('admin')}
-                  className={`px-2 xl:px-2.5 py-1.5 rounded-lg font-mono text-[11px] xl:text-xs font-bold transition-all duration-200 flex items-center gap-1 xl:gap-1.5 cursor-pointer whitespace-nowrap ${
+                  className={`px-2 2xl:px-2.5 py-1.5 rounded-lg font-mono text-[11px] 2xl:text-xs font-bold transition-all duration-200 flex items-center gap-1 2xl:gap-1.5 cursor-pointer whitespace-nowrap ${
                     currentTab === 'admin'
                       ? 'text-amber-300 bg-amber-500/20 border border-amber-500/70 shadow-[0_0_12px_rgba(245,158,11,0.35)]'
                       : 'text-amber-400/80 hover:text-amber-300 hover:bg-amber-500/10 border border-transparent'
@@ -260,7 +272,7 @@ export const Header: React.FC<HeaderProps> = ({
 
             {/* WS Connected Badge (Desktop) */}
             <div
-              className={`flex px-2 py-1 sm:py-1.5 rounded-xl text-[10px] font-mono font-bold border items-center gap-1.5 shrink-0 ${
+              className={`hidden md:flex px-2 py-1 sm:py-1.5 rounded-xl text-[10px] font-mono font-bold border items-center gap-1.5 shrink-0 ${
                 isConnected
                   ? 'bg-[#040c14]/90 text-[#00ff41] border-[#00ff41]/40 shadow-[0_0_8px_rgba(0,255,65,0.15)]'
                   : 'bg-red-950/40 text-red-400 border-red-500/40'
@@ -281,10 +293,10 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="hidden xl:inline">{isConnected ? 'LIVE' : 'OFF'}</span>
             </div>
 
-            {/* Audio Toggle Button - ALWAYS Visible on Desktop and Mobile */}
+            {/* Audio Toggle Button - ALWAYS Visible on sm+ screens */}
             <button
               onClick={toggleSound}
-              className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl border font-mono text-xs font-bold transition-all cursor-pointer shrink-0 ${
+              className={`hidden sm:flex items-center gap-1 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl border font-mono text-xs font-bold transition-all cursor-pointer shrink-0 ${
                 muted
                   ? 'bg-red-950/30 text-slate-400 border-slate-800 hover:border-red-500/40 hover:text-red-300'
                   : 'bg-[#050e18]/90 text-[#00ff41] border-[#00ff41]/40 shadow-[0_0_10px_rgba(0,255,65,0.2)] hover:border-[#00ff41]'
@@ -337,7 +349,7 @@ export const Header: React.FC<HeaderProps> = ({
                     </div>
 
                     <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">
-                      TEAM MEMBERS ({team.members.length}/4):
+                      TEAM MEMBERS ({team.members.length}/3):
                     </div>
                     <ul className="space-y-1 mb-3 bg-[#040810] p-2 rounded-lg border border-slate-800">
                       {team.members.map((m, i) => (
@@ -383,18 +395,19 @@ export const Header: React.FC<HeaderProps> = ({
             ) : (
               <button
                 onClick={onOpenAuthModal}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-mono text-xs font-bold uppercase tracking-wider transition-all duration-300 bg-[#00ff41]/15 hover:bg-[#00ff41] text-[#00ff41] hover:text-black border border-[#00ff41] shadow-[0_0_12px_rgba(0,255,65,0.25)] hover:shadow-[0_0_20px_rgba(0,255,65,0.5)] active:scale-95 cursor-pointer shrink-0"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl font-mono text-xs font-bold uppercase tracking-wider transition-all duration-300 bg-[#00ff41]/15 hover:bg-[#00ff41] text-[#00ff41] hover:text-black border border-[#00ff41] shadow-[0_0_12px_rgba(0,255,65,0.25)] hover:shadow-[0_0_20px_rgba(0,255,65,0.5)] active:scale-95 cursor-pointer shrink-0"
                 title="Sign in or register a new team"
               >
                 <UserCheck className="w-3.5 h-3.5 shrink-0" />
-                <span>SIGN UP / IN</span>
+                <span className="hidden sm:inline">SIGN UP / IN</span>
+                <span className="sm:hidden">LOGIN</span>
               </button>
             )}
 
-            {/* Mobile Hamburger Drawer Trigger Button (< lg screens, min 44x44px touch target) */}
+            {/* Mobile Hamburger Drawer Trigger Button (< xl screens, min 44x44px touch target) */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-2 sm:p-2.5 min-w-[38px] sm:min-w-[42px] min-h-[38px] sm:min-h-[42px] rounded-xl bg-[#050e18]/90 border border-emerald-500/40 text-slate-300 hover:text-[#00ff41] hover:border-[#00ff41] flex items-center justify-center transition-all cursor-pointer active:scale-95 shadow-[0_0_12px_rgba(0,255,65,0.15)] shrink-0"
+              className="xl:hidden p-2 sm:p-2.5 min-w-[38px] sm:min-w-[42px] min-h-[38px] sm:min-h-[42px] rounded-xl bg-[#050e18]/90 border border-emerald-500/40 text-slate-300 hover:text-[#00ff41] hover:border-[#00ff41] flex items-center justify-center transition-all cursor-pointer active:scale-95 shadow-[0_0_12px_rgba(0,255,65,0.15)] shrink-0"
               aria-label="Toggle navigation drawer"
             >
               {mobileMenuOpen ? <X className="w-5 h-5 text-[#00ff41]" /> : <Menu className="w-5 h-5 text-[#00ff41]" />}
@@ -402,9 +415,9 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* ================= MOBILE NAVIGATION DRAWER (< lg screens) ================= */}
+        {/* ================= MOBILE NAVIGATION DRAWER (< xl screens) ================= */}
         {mobileMenuOpen && (
-          <div className="lg:hidden border-t border-emerald-500/30 bg-[#050c14]/98 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.95)] px-4 py-5 space-y-4 font-mono text-xs animate-in slide-in-from-top duration-200">
+          <div className="xl:hidden border-t border-emerald-500/30 bg-[#050c14]/98 backdrop-blur-2xl shadow-[0_20px_50px_rgba(0,0,0,0.95)] px-4 py-5 space-y-4 font-mono text-xs animate-in slide-in-from-top duration-200">
             {/* Primary Navigation Links with 44px+ Touch Targets */}
             <div className="space-y-1.5">
               <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider px-1 pb-1 flex items-center justify-between">
@@ -414,6 +427,7 @@ export const Header: React.FC<HeaderProps> = ({
               {navTabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = currentTab === tab.id;
+                const locked = isTabLocked(tab.id);
                 return (
                   <button
                     key={tab.id}
@@ -421,16 +435,25 @@ export const Header: React.FC<HeaderProps> = ({
                     className={`w-full min-h-[46px] px-3.5 py-2.5 rounded-xl font-bold flex items-center justify-between transition-all cursor-pointer ${
                       isActive
                         ? 'bg-[#00ff41]/20 text-[#00ff41] border border-[#00ff41] shadow-[0_0_15px_rgba(0,255,65,0.3)]'
+                        : locked
+                        ? 'bg-[#08111d]/40 text-slate-500 hover:text-slate-300 border border-slate-900'
                         : 'bg-[#08111d]/60 text-slate-300 hover:text-white hover:bg-slate-800/60 border border-slate-800/80'
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <Icon className={`w-4 h-4 ${isActive ? 'text-[#00ff41]' : 'text-slate-400'}`} />
-                      <span className="text-sm tracking-wide">{tab.label}</span>
+                      <Icon className={`w-4 h-4 ${isActive ? 'text-[#00ff41]' : locked ? 'text-slate-600' : 'text-slate-400'}`} />
+                      <span className={`text-sm tracking-wide ${locked ? 'text-slate-500' : ''}`}>{tab.label}</span>
                     </div>
-                    <span className={isActive ? 'text-[#00ff41] font-mono text-xs' : 'text-slate-600'}>
-                      {isActive ? '[ACTIVE]' : '→'}
-                    </span>
+                    {locked ? (
+                      <span className="text-[10px] text-slate-500 font-mono flex items-center gap-1 bg-slate-900/90 px-2 py-0.5 rounded border border-slate-800">
+                        <Lock className="w-2.5 h-2.5 text-slate-500" />
+                        <span>LOCKED</span>
+                      </span>
+                    ) : (
+                      <span className={isActive ? 'text-[#00ff41] font-mono text-xs' : 'text-slate-600'}>
+                        {isActive ? '[ACTIVE]' : '→'}
+                      </span>
+                    )}
                   </button>
                 );
               })}
