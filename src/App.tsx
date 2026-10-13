@@ -864,20 +864,22 @@ export default function App() {
                     onAdminSuccess={handleAdminLoginSuccess}
                     onExploreScoreboard={() => setCurrentTab('leaderboard')}
                   />
-                ) : !isReadyToStart ? (
-                  /* Pre-Competition Gate: Explicit Opt-In Before Challenges Render */
+                ) : (competitionState.status !== 'running' && !adminToken) || !isReadyToStart ? (
+                  /* Pre-Competition Gate: Explicit Opt-In Before Challenges Render & Holds Teams Until Admin Starts */
                   <PreCompetitionGate
                     teamName={team.teamName}
                     members={team.members}
                     totalChallengesCount={challenges.length}
                     totalPointsPool={challenges.reduce((acc, c) => acc + c.points, 0)}
                     remainingSeconds={competitionState.remainingSeconds}
+                    competitionStatus={competitionState.status}
+                    hasStarted={Boolean((team.hasStarted || isReadyToStart) && competitionState.status === 'running')}
                     onConfirmReady={handleConfirmReady}
                     onNavigateToChallenges={() => setCurrentTab('challenges')}
                     onOpenAuthModal={() => setIsAuthModalOpen(true)}
                   />
                 ) : (
-                  /* Challenge Marketplace: Active Only After [ READY TO START ] */
+                  /* Challenge Marketplace: Active Only After [ READY TO START ] AND Admin Has Started */
                   <ChallengeSection
                     challenges={challenges}
                     teamLoggedIn={Boolean(team)}
@@ -897,7 +899,8 @@ export default function App() {
                 totalChallengesCount={challenges.length}
                 totalPointsPool={challenges.reduce((acc, c) => acc + c.points, 0)}
                 remainingSeconds={competitionState.remainingSeconds}
-                hasStarted={Boolean(team?.hasStarted || isReadyToStart)}
+                competitionStatus={competitionState.status}
+                hasStarted={Boolean((team?.hasStarted || isReadyToStart) && competitionState.status === 'running')}
                 onConfirmReady={handleConfirmReady}
                 onNavigateToChallenges={() => setCurrentTab('challenges')}
                 onOpenAuthModal={() => setIsAuthModalOpen(true)}

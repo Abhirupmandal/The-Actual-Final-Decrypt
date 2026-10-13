@@ -185,7 +185,7 @@ let securityLogs: SecurityLog[] = securityLogStore.getAll(300);
 
 // Competition State - Persisted in SQLite config store
 const defaultCompetitionState: CompetitionState = {
-  status: 'running',
+  status: 'paused',
   startTime: Date.now(),
   durationSeconds: 7200, // 2 hours
   remainingSeconds: 7200,
@@ -194,6 +194,11 @@ const defaultCompetitionState: CompetitionState = {
   announcement: null,
 };
 const competitionState: CompetitionState = competitionStateStore.getState(defaultCompetitionState);
+// Ensure tournament timer is paused on boot until Admin explicitly clicks "START TIMER" in Admin Portal
+if (competitionState.remainingSeconds >= competitionState.durationSeconds && competitionState.status === 'running') {
+  competitionState.status = 'paused';
+  competitionStateStore.saveState(competitionState);
+}
 
 // --- Helper Functions ---
 function getClientIp(req: Request): string {
