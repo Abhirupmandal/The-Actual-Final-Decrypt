@@ -140,21 +140,71 @@ class PostgresSyncManager {
 
           CREATE TABLE IF NOT EXISTS audit_logs (
             id TEXT PRIMARY KEY,
+            actor_type TEXT,
+            actor_identifier TEXT,
+            action_type TEXT,
+            details TEXT,
+            ip_address TEXT,
+            timestamp_ms BIGINT,
             log_data TEXT NOT NULL,
             timestamp BIGINT NOT NULL
           );
+          ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS actor_type TEXT;
+          ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS actor_identifier TEXT;
+          ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS action_type TEXT;
+          ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS details TEXT;
+          ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS ip_address TEXT;
+          ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS timestamp_ms BIGINT;
 
           CREATE TABLE IF NOT EXISTS security_logs (
             id TEXT PRIMARY KEY,
+            team_name TEXT,
+            ip TEXT,
+            type TEXT,
+            details TEXT,
+            severity TEXT,
             log_data TEXT NOT NULL,
             timestamp BIGINT NOT NULL
           );
+          ALTER TABLE security_logs ADD COLUMN IF NOT EXISTS team_name TEXT;
+          ALTER TABLE security_logs ADD COLUMN IF NOT EXISTS ip TEXT;
+          ALTER TABLE security_logs ADD COLUMN IF NOT EXISTS type TEXT;
+          ALTER TABLE security_logs ADD COLUMN IF NOT EXISTS details TEXT;
+          ALTER TABLE security_logs ADD COLUMN IF NOT EXISTS severity TEXT;
 
           CREATE TABLE IF NOT EXISTS screenshot_alerts (
             id TEXT PRIMARY KEY,
+            team_id TEXT,
+            team_name TEXT,
+            email TEXT,
+            ip TEXT,
+            trigger_key TEXT,
+            details TEXT,
             alert_data TEXT NOT NULL,
             timestamp BIGINT NOT NULL
           );
+          ALTER TABLE screenshot_alerts ADD COLUMN IF NOT EXISTS team_id TEXT;
+          ALTER TABLE screenshot_alerts ADD COLUMN IF NOT EXISTS team_name TEXT;
+          ALTER TABLE screenshot_alerts ADD COLUMN IF NOT EXISTS email TEXT;
+          ALTER TABLE screenshot_alerts ADD COLUMN IF NOT EXISTS ip TEXT;
+          ALTER TABLE screenshot_alerts ADD COLUMN IF NOT EXISTS trigger_key TEXT;
+          ALTER TABLE screenshot_alerts ADD COLUMN IF NOT EXISTS details TEXT;
+
+          CREATE TABLE IF NOT EXISTS challenges (
+            id TEXT PRIMARY KEY,
+            title TEXT,
+            section TEXT,
+            category TEXT,
+            points INTEGER,
+            difficulty TEXT,
+            data TEXT NOT NULL,
+            updated_at BIGINT NOT NULL
+          );
+          ALTER TABLE challenges ADD COLUMN IF NOT EXISTS title TEXT;
+          ALTER TABLE challenges ADD COLUMN IF NOT EXISTS section TEXT;
+          ALTER TABLE challenges ADD COLUMN IF NOT EXISTS category TEXT;
+          ALTER TABLE challenges ADD COLUMN IF NOT EXISTS points INTEGER;
+          ALTER TABLE challenges ADD COLUMN IF NOT EXISTS difficulty TEXT;
         `);
         this.isConnected = true;
         this.hasInitializedSchema = true;
@@ -365,6 +415,135 @@ class PostgresSyncManager {
     }
   }
 
+  public async saveScreenshotAlert(alert: ScreenshotAlert): Promise<void> {
+    if (!this.pool || !this.isConnected) return;
+    try {
+      await this.pool.query(`
+        ALTER TABLE screenshot_alerts ADD COLUMN IF NOT EXISTS team_id TEXT;
+        ALTER TABLE screenshot_alerts ADD COLUMN IF NOT EXISTS team_name TEXT;
+        ALTER TABLE screenshot_alerts ADD COLUMN IF NOT EXISTS email TEXT;
+        ALTER TABLE screenshot_alerts ADD COLUMN IF NOT EXISTS ip TEXT;
+        ALTER TABLE screenshot_alerts ADD COLUMN IF NOT EXISTS trigger_key TEXT;
+        ALTER TABLE screenshot_alerts ADD COLUMN IF NOT EXISTS details TEXT;
+      `);
+
+      await this.pool.query(
+        `
+        INSERT INTO screenshot_alerts (
+          id, team_id, team_name, email, ip, trigger_key, details, alert_data, timestamp
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ON CONFLICT (id) DO UPDATE SET
+          team_id = EXCLUDED.team_id,
+          team_name = EXCLUDED.team_name,
+          email = EXCLUDED.email,
+          ip = EXCLUDED.ip,
+          trigger_key = EXCLUDED.trigger_key,
+          details = EXCLUDED.details,
+          alert_data = EXCLUDED.alert_data,
+          timestamp = EXCLUDED.timestamp;
+        `,
+        [
+          alert.id,
+          alert.teamId,
+          alert.teamName,
+          alert.email || null,
+          alert.ip,
+          alert.triggerKey || null,
+          alert.details,
+          JSON.stringify(alert),
+          alert.timestamp,
+        ]
+      );
+    } catch (err) {
+      console.error('[PostgreSQL] Error saving screenshot alert:', err);
+    }
+  }
+
+  public async saveSecurityLog(log: SecurityLog): Promise<void> {
+    if (!this.pool || !this.isConnected) return;
+    try {
+      await this.pool.query(`
+        ALTER TABLE security_logs ADD COLUMN IF NOT EXISTS team_name TEXT;
+        ALTER TABLE security_logs ADD COLUMN IF NOT EXISTS ip TEXT;
+        ALTER TABLE security_logs ADD COLUMN IF NOT EXISTS type TEXT;
+        ALTER TABLE security_logs ADD COLUMN IF NOT EXISTS details TEXT;
+        ALTER TABLE security_logs ADD COLUMN IF NOT EXISTS severity TEXT;
+      `);
+
+      await this.pool.query(
+        `
+        INSERT INTO security_logs (
+          id, team_name, ip, type, details, severity, log_data, timestamp
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT (id) DO UPDATE SET
+          team_name = EXCLUDED.team_name,
+          ip = EXCLUDED.ip,
+          type = EXCLUDED.type,
+          details = EXCLUDED.details,
+          severity = EXCLUDED.severity,
+          log_data = EXCLUDED.log_data,
+          timestamp = EXCLUDED.timestamp;
+        `,
+        [
+          log.id,
+          log.teamName || null,
+          log.ip,
+          log.type,
+          log.details,
+          log.severity,
+          JSON.stringify(log),
+          log.timestamp,
+        ]
+      );
+    } catch (err) {
+      console.error('[PostgreSQL] Error saving security log:', err);
+    }
+  }
+
+  public async saveAuditLog(log: AuditLog): Promise<void> {
+    if (!this.pool || !this.isConnected) return;
+    try {
+      await this.pool.query(`
+        ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS actor_type TEXT;
+        ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS actor_identifier TEXT;
+        ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS action_type TEXT;
+        ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS details TEXT;
+        ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS ip_address TEXT;
+        ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS timestamp_ms BIGINT;
+      `);
+
+      await this.pool.query(
+        `
+        INSERT INTO audit_logs (
+          id, actor_type, actor_identifier, action_type, details, ip_address, timestamp_ms, log_data, timestamp
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ON CONFLICT (id) DO UPDATE SET
+          actor_type = EXCLUDED.actor_type,
+          actor_identifier = EXCLUDED.actor_identifier,
+          action_type = EXCLUDED.action_type,
+          details = EXCLUDED.details,
+          ip_address = EXCLUDED.ip_address,
+          timestamp_ms = EXCLUDED.timestamp_ms,
+          log_data = EXCLUDED.log_data,
+          timestamp = EXCLUDED.timestamp;
+        `,
+        [
+          log.logId,
+          log.actorType,
+          log.actorIdentifier,
+          log.actionType,
+          log.details,
+          log.ipAddress,
+          log.timestampMs,
+          JSON.stringify(log),
+          log.timestampMs,
+        ]
+      );
+    } catch (err) {
+      console.error('[PostgreSQL] Error saving audit log:', err);
+    }
+  }
+
   public async saveCompetitionConfig(config: CompetitionState): Promise<void> {
     if (!this.pool || !this.isConnected) return;
     try {
@@ -462,6 +641,45 @@ class PostgresSyncManager {
       await this.pool.query('DELETE FROM challenges WHERE id = $1', [id]);
     } catch (err) {
       console.error('[PostgreSQL] Error deleting challenge:', err);
+    }
+  }
+
+  public async deleteScreenshotAlert(id: string): Promise<void> {
+    if (!this.pool || !this.isConnected) return;
+    try {
+      await this.pool.query('DELETE FROM screenshot_alerts WHERE id = $1', [id]);
+    } catch (err) {
+      console.error('[PostgreSQL] Error deleting screenshot alert:', err);
+    }
+  }
+
+  public async clearScreenshotAlerts(): Promise<void> {
+    if (!this.pool || !this.isConnected) return;
+    try {
+      await this.pool.query('DELETE FROM screenshot_alerts');
+    } catch (err) {
+      console.error('[PostgreSQL] Error clearing screenshot alerts:', err);
+    }
+  }
+
+  public async clearSecurityLogs(): Promise<void> {
+    if (!this.pool || !this.isConnected) return;
+    try {
+      await this.pool.query('DELETE FROM security_logs');
+    } catch (err) {
+      console.error('[PostgreSQL] Error clearing security logs:', err);
+    }
+  }
+
+  public async wipeAll(): Promise<void> {
+    if (!this.pool || !this.isConnected) return;
+    try {
+      await this.pool.query(`
+        TRUNCATE TABLE teams, submissions, activity_feed, screenshot_alerts, security_logs, audit_logs, user_feedbacks CASCADE;
+      `);
+      console.log('[PostgreSQL] Successfully wiped all runtime tables in Supabase.');
+    } catch (err) {
+      console.error('[PostgreSQL] Error wiping tables in Supabase:', err);
     }
   }
 

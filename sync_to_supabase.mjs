@@ -122,9 +122,35 @@ async function main() {
 
       CREATE TABLE IF NOT EXISTS screenshot_alerts (
         id TEXT PRIMARY KEY,
+        team_id TEXT,
+        team_name TEXT,
+        email TEXT,
+        ip TEXT,
+        trigger_key TEXT,
+        details TEXT,
         alert_data TEXT NOT NULL,
         timestamp BIGINT NOT NULL
       );
+
+      ALTER TABLE screenshot_alerts ADD COLUMN IF NOT EXISTS team_id TEXT;
+      ALTER TABLE screenshot_alerts ADD COLUMN IF NOT EXISTS team_name TEXT;
+      ALTER TABLE screenshot_alerts ADD COLUMN IF NOT EXISTS email TEXT;
+      ALTER TABLE screenshot_alerts ADD COLUMN IF NOT EXISTS ip TEXT;
+      ALTER TABLE screenshot_alerts ADD COLUMN IF NOT EXISTS trigger_key TEXT;
+      ALTER TABLE screenshot_alerts ADD COLUMN IF NOT EXISTS details TEXT;
+
+      ALTER TABLE security_logs ADD COLUMN IF NOT EXISTS team_name TEXT;
+      ALTER TABLE security_logs ADD COLUMN IF NOT EXISTS ip TEXT;
+      ALTER TABLE security_logs ADD COLUMN IF NOT EXISTS type TEXT;
+      ALTER TABLE security_logs ADD COLUMN IF NOT EXISTS details TEXT;
+      ALTER TABLE security_logs ADD COLUMN IF NOT EXISTS severity TEXT;
+
+      ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS actor_type TEXT;
+      ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS actor_identifier TEXT;
+      ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS action_type TEXT;
+      ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS details TEXT;
+      ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS ip_address TEXT;
+      ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS timestamp_ms BIGINT;
     `);
     console.log(' All tables and indexes verified/created in Supabase!\n');
 

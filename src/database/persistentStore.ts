@@ -801,6 +801,11 @@ class SqliteScreenshotStore {
     ]);
     stmt.free();
     this.syncFn();
+
+    if (postgresSync.isEnabled()) {
+      postgresSync.saveScreenshotAlert(alert);
+    }
+
     return alert;
   }
 
@@ -836,12 +841,18 @@ class SqliteScreenshotStore {
   public delete(id: string): boolean {
     this.db.run('DELETE FROM screenshot_alerts WHERE id = ?;', [id]);
     this.syncFn();
+    if (postgresSync.isEnabled()) {
+      postgresSync.deleteScreenshotAlert(id);
+    }
     return true;
   }
 
   public clearAll(): void {
     this.db.run('DELETE FROM screenshot_alerts;');
     this.syncFn();
+    if (postgresSync.isEnabled()) {
+      postgresSync.clearScreenshotAlerts();
+    }
   }
 }
 
@@ -883,6 +894,11 @@ class SqliteSecurityLogStore {
     ]);
     stmt.free();
     this.syncFn();
+
+    if (postgresSync.isEnabled()) {
+      postgresSync.saveSecurityLog(log);
+    }
+
     return log;
   }
 
@@ -916,6 +932,9 @@ class SqliteSecurityLogStore {
   public clearAll(): void {
     this.db.run('DELETE FROM security_logs;');
     this.syncFn();
+    if (postgresSync.isEnabled()) {
+      postgresSync.clearSecurityLogs();
+    }
   }
 }
 
@@ -1146,6 +1165,10 @@ class SqliteSubmissionStore {
       console.error('[SQLite SubmissionStore] Error reading submissions:', err);
       return [];
     }
+  }
+
+  public getAll(limit = 1000): SubmissionRecord[] {
+    return this.getRecent(limit);
   }
 
   public getByTeam(teamId: string, limit = 100): SubmissionRecord[] {
@@ -1458,6 +1481,10 @@ class SqliteAuditLogStore {
       ]);
       stmt.free();
       this.syncFn();
+
+      if (postgresSync.isEnabled()) {
+        postgresSync.saveAuditLog(fullLog);
+      }
     } catch (err) {
       console.error('[SQLite AuditLogStore] Error adding audit log:', err, {
         entry,
@@ -1775,6 +1802,30 @@ if (postgresSync.isEnabled()) {
         const currentChals = challengeStore.getAll();
         if (currentChals.length > 0) {
           await postgresSync.syncChallenges(currentChals);
+        }
+
+        // Backfill existing screenshot alerts to Supabase
+        const currentScreenshots = screenshotStore.getAll(100);
+        for (const s of currentScreenshots) {
+          await postgresSync.saveScreenshotAlert(s);
+        }
+
+        // Backfill existing security logs to Supabase
+        const currentSecLogs = securityLogStore.getAll(100);
+        for (const sl of currentSecLogs) {
+          await postgresSync.saveSecurityLog(sl);
+        }
+
+        // Backfill existing audit logs to Supabase
+        const currentAuditLogs = auditLogStore.getAll(200);
+        for (const al of currentAuditLogs) {
+          await postgresSync.saveAuditLog(al);
+        }
+
+        // Backfill existing challenge submissions to Supabase
+        const currentSubs = submissionStore.getAll();
+        for (const sub of currentSubs) {
+          await postgresSync.saveSubmission(sub);
         }
       } catch (e) {
         console.error('[PostgreSQL] Error during initial state synchronization:', e);
