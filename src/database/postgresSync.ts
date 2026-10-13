@@ -21,6 +21,16 @@ class PostgresSyncManager {
   constructor() {
     const dbUrl = process.env.DATABASE_URL?.trim();
     if (dbUrl) {
+      if (dbUrl.includes('.supabase.co') && !dbUrl.includes('pooler.supabase.com')) {
+        console.warn('\n' + '='.repeat(70));
+        console.warn('[PostgreSQL WARNING] Detected Direct Supabase URL (db.*.supabase.co)!');
+        console.warn('Render only supports IPv4. Direct Supabase connections fail with ENETUNREACH.');
+        console.warn('Fix: In Supabase, copy the "Connection Pooler" (Session Mode) URI:');
+        console.warn('  e.g., postgresql://postgres.[project-ref]:[pwd]@aws-0-[region].pooler.supabase.com:5432/postgres');
+        console.warn('Update DATABASE_URL in Render Environment settings to resolve this.');
+        console.warn('='.repeat(70) + '\n');
+      }
+
       try {
         this.pool = new Pool({
           connectionString: dbUrl,
@@ -153,8 +163,16 @@ class PostgresSyncManager {
       } finally {
         client.release();
       }
-    } catch (err) {
-      console.error('[PostgreSQL] Error during initSchema:', err);
+    } catch (err: any) {
+      if (err?.code === 'ENETUNREACH' || err?.message?.includes('ENETUNREACH')) {
+        console.error('\n' + '!'.repeat(70));
+        console.error('[PostgreSQL CRITICAL] ENETUNREACH: Cannot reach Supabase via IPv6 on Render.');
+        console.error('Please switch your Render DATABASE_URL from db.*.supabase.co to the Supabase Connection Pooler:');
+        console.error('  aws-0-*.pooler.supabase.com on port 5432 (Session Mode) or port 6543 (Transaction Mode).');
+        console.error('!'.repeat(70) + '\n');
+      } else {
+        console.error('[PostgreSQL] Error during initSchema:', err);
+      }
       this.isConnected = false;
       return false;
     }

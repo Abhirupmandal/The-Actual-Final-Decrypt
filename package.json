@@ -8,6 +8,7 @@
     "build": "vite build",
     "start": "tsx server.ts",
     "clean": "rm -rf dist server.js",
+    "sync:supabase": "node sync_to_supabase.mjs",
     "lint": "tsc --noEmit"
   },
   "dependencies": {
