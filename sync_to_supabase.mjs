@@ -210,7 +210,51 @@ async function main() {
     }
 
     console.log(`\n SUCCESS: ${inserted} teams successfully synced to Supabase PostgreSQL!`);
-    console.log('Now, when Render connects with the Connection Pooler DATABASE_URL, all these teams and logins will be live!\n');
+
+    console.log('\n[4/4] Syncing 20 CTF challenges from questions.json to Supabase...');
+    const questionsPath = path.join(__dirname, 'questions.json');
+    if (fs.existsSync(questionsPath)) {
+      const rawQuestions = fs.readFileSync(questionsPath, 'utf-8');
+      const questions = JSON.parse(rawQuestions);
+
+      await client.query(`
+        ALTER TABLE challenges ADD COLUMN IF NOT EXISTS title TEXT;
+        ALTER TABLE challenges ADD COLUMN IF NOT EXISTS section TEXT;
+        ALTER TABLE challenges ADD COLUMN IF NOT EXISTS category TEXT;
+        ALTER TABLE challenges ADD COLUMN IF NOT EXISTS points INTEGER;
+        ALTER TABLE challenges ADD COLUMN IF NOT EXISTS difficulty TEXT;
+      `);
+
+      let chalCount = 0;
+      for (const q of questions) {
+        await client.query(
+          `
+          INSERT INTO challenges (id, title, section, category, points, difficulty, data, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          ON CONFLICT (id) DO UPDATE SET
+            title = EXCLUDED.title,
+            section = EXCLUDED.section,
+            category = EXCLUDED.category,
+            points = EXCLUDED.points,
+            difficulty = EXCLUDED.difficulty,
+            data = EXCLUDED.data,
+            updated_at = EXCLUDED.updated_at;
+          `,
+          [
+            q.id,
+            q.title,
+            q.section,
+            q.category,
+            q.points,
+            q.difficulty,
+            JSON.stringify(q),
+            Date.now(),
+          ]
+        );
+        chalCount++;
+      }
+      console.log(` ✓ Successfully synced all ${chalCount} challenges into Supabase challenges table!\n`);
+    }
   } finally {
     client.release();
     await pool.end();

@@ -712,6 +712,9 @@ class SqliteChallengeStore {
     this.insertOrUpdateSqlite(c);
     this.syncFn();
     this.exportToQuestionsJson();
+    if (postgresSync.isEnabled()) {
+      postgresSync.saveChallenge(c);
+    }
     return c;
   }
 
@@ -727,6 +730,9 @@ class SqliteChallengeStore {
     this.insertOrUpdateSqlite(updated);
     this.syncFn();
     this.exportToQuestionsJson();
+    if (postgresSync.isEnabled()) {
+      postgresSync.saveChallenge(updated);
+    }
     return updated;
   }
 
@@ -736,6 +742,9 @@ class SqliteChallengeStore {
     this.db.run('DELETE FROM challenges WHERE id = ?;', [id]);
     this.syncFn();
     this.exportToQuestionsJson();
+    if (postgresSync.isEnabled()) {
+      postgresSync.deleteChallenge(id);
+    }
     return true;
   }
 
@@ -1760,6 +1769,12 @@ if (postgresSync.isEnabled()) {
         if (pgConfig) {
           console.log('[PostgreSQL] Loaded competition configuration from remote cloud PostgreSQL.');
           competitionStateStore.saveState(pgConfig);
+        }
+
+        // Synchronize all challenges into Supabase challenges table
+        const currentChals = challengeStore.getAll();
+        if (currentChals.length > 0) {
+          await postgresSync.syncChallenges(currentChals);
         }
       } catch (e) {
         console.error('[PostgreSQL] Error during initial state synchronization:', e);

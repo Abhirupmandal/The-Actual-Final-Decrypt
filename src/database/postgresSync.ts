@@ -381,6 +381,90 @@ class PostgresSyncManager {
     }
   }
 
+  public async syncChallenges(challengesList: Challenge[]): Promise<void> {
+    if (!this.pool || !this.isConnected) return;
+    try {
+      await this.pool.query(`
+        ALTER TABLE challenges ADD COLUMN IF NOT EXISTS title TEXT;
+        ALTER TABLE challenges ADD COLUMN IF NOT EXISTS section TEXT;
+        ALTER TABLE challenges ADD COLUMN IF NOT EXISTS category TEXT;
+        ALTER TABLE challenges ADD COLUMN IF NOT EXISTS points INTEGER;
+        ALTER TABLE challenges ADD COLUMN IF NOT EXISTS difficulty TEXT;
+      `);
+
+      for (const chal of challengesList) {
+        await this.pool.query(
+          `
+          INSERT INTO challenges (id, title, section, category, points, difficulty, data, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+          ON CONFLICT (id) DO UPDATE SET
+            title = EXCLUDED.title,
+            section = EXCLUDED.section,
+            category = EXCLUDED.category,
+            points = EXCLUDED.points,
+            difficulty = EXCLUDED.difficulty,
+            data = EXCLUDED.data,
+            updated_at = EXCLUDED.updated_at;
+          `,
+          [
+            chal.id,
+            chal.title,
+            chal.section,
+            chal.category,
+            chal.points,
+            chal.difficulty,
+            JSON.stringify(chal),
+            Date.now(),
+          ]
+        );
+      }
+      console.log(`[PostgreSQL] Synchronized all ${challengesList.length} challenges into Supabase challenges table.`);
+    } catch (err) {
+      console.error('[PostgreSQL] Error syncing challenges:', err);
+    }
+  }
+
+  public async saveChallenge(chal: Challenge): Promise<void> {
+    if (!this.pool || !this.isConnected) return;
+    try {
+      await this.pool.query(
+        `
+        INSERT INTO challenges (id, title, section, category, points, difficulty, data, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT (id) DO UPDATE SET
+          title = EXCLUDED.title,
+          section = EXCLUDED.section,
+          category = EXCLUDED.category,
+          points = EXCLUDED.points,
+          difficulty = EXCLUDED.difficulty,
+          data = EXCLUDED.data,
+          updated_at = EXCLUDED.updated_at;
+        `,
+        [
+          chal.id,
+          chal.title,
+          chal.section,
+          chal.category,
+          chal.points,
+          chal.difficulty,
+          JSON.stringify(chal),
+          Date.now(),
+        ]
+      );
+    } catch (err) {
+      console.error('[PostgreSQL] Error saving challenge:', err);
+    }
+  }
+
+  public async deleteChallenge(id: string): Promise<void> {
+    if (!this.pool || !this.isConnected) return;
+    try {
+      await this.pool.query('DELETE FROM challenges WHERE id = $1', [id]);
+    } catch (err) {
+      console.error('[PostgreSQL] Error deleting challenge:', err);
+    }
+  }
+
   public async loadCompetitionConfig(): Promise<CompetitionState | null> {
     if (!this.pool || !this.isConnected) return null;
     try {
