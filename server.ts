@@ -1679,9 +1679,15 @@ app.post('/api/unlock-hint', requireTeamAuth, (req: Request, res: Response) => {
     return res.json({ success: true, hintContent: hint.content, message: 'Hint already purchased.' });
   }
 
-  const hintPenalty = Math.max(0, hint.cost || 0);
+  // Deduct 25 points whenever a user takes hints for the first time of that particular question.
+  // If user has 0 points, their score will go negative (e.g. 0 - 25 = -25).
+  const isFirstHintForQuestion = team.hintsUnlocked[challengeId].length === 0;
+  const hintPenalty = isFirstHintForQuestion
+    ? 25
+    : (hint.cost !== undefined && hint.cost !== null ? hint.cost : 25);
+
   if (hintPenalty > 0) {
-    team.score = Math.max(0, team.score - hintPenalty);
+    team.score -= hintPenalty;
   }
 
   team.hintsUnlocked[challengeId].push(hintId);
@@ -1700,7 +1706,7 @@ app.post('/api/unlock-hint', requireTeamAuth, (req: Request, res: Response) => {
     teamName: team.teamName,
     challengeTitle: chal.title,
     points: -hintPenalty,
-    message: `Unlocked Hint for ${chal.title} (-${hintPenalty} pts deducted from score).`,
+    message: `Unlocked Hint for ${chal.title} (-${hintPenalty} pts deducted. Score: ${team.score} pts).`,
   };
   recordUserActivity(event);
 
@@ -1724,7 +1730,7 @@ app.post('/api/unlock-hint', requireTeamAuth, (req: Request, res: Response) => {
     hintContent: hint.content,
     penalty: hintPenalty,
     teamScore: team.score,
-    message: `Hint unlocked! -${hintPenalty} pts deducted immediately from your team score.`,
+    message: `Hint unlocked! -${hintPenalty} pts deducted. Current score: ${team.score} pts.`,
   });
 });
 

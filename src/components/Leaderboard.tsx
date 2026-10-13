@@ -274,6 +274,16 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                           </span>
                         )}
 
+                        {!entry.isDisqualified && entry.score < 0 && (
+                          <span
+                            className="text-[10px] font-bold text-rose-300 bg-rose-950/80 px-2 py-0.5 rounded border border-rose-500/60 flex items-center gap-1 shadow-[0_0_8px_rgba(244,63,94,0.3)]"
+                            title="Score is negative due to hint point deductions"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse" />
+                            <span>HINT DEDUCTION ({entry.score} PTS)</span>
+                          </span>
+                        )}
+
                         {!entry.isDisqualified && entry.score === 0 && (
                           <span
                             className="text-[10px] font-bold text-slate-300 bg-slate-800/90 px-2 py-0.5 rounded border border-slate-700 flex items-center gap-1"
@@ -335,8 +345,8 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
 
                     <td className="py-4 px-4 text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Zap className={`w-3.5 h-3.5 ${entry.score > 0 ? 'text-[#00ff66]' : 'text-slate-600'}`} />
-                        <span className={`text-base sm:text-lg font-black tracking-wider ${entry.score > 0 ? 'text-[#00ff66] drop-shadow-[0_0_8px_rgba(0,255,102,0.4)]' : 'text-slate-500'}`}>
+                        <Zap className={`w-3.5 h-3.5 ${entry.score > 0 ? 'text-[#00ff66]' : entry.score < 0 ? 'text-rose-500' : 'text-slate-600'}`} />
+                        <span className={`text-base sm:text-lg font-black tracking-wider ${entry.score > 0 ? 'text-[#00ff66] drop-shadow-[0_0_8px_rgba(0,255,102,0.4)]' : entry.score < 0 ? 'text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.4)]' : 'text-slate-500'}`}>
                           {entry.score}
                         </span>
                         <span className="text-[10px] text-slate-500 ml-0.5">PTS</span>

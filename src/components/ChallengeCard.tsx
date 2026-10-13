@@ -164,7 +164,7 @@ export const ChallengeCard: React.FC<ChallengeCardProps> = ({
         setHintToUnlock(null);
         setStatusMessage({
           type: 'info',
-          text: `Hint unlocked: -${hintToUnlock.cost} points deducted from final reward!`,
+          text: data.message || `Hint unlocked: -${data.penalty || hintToUnlock.cost || 25} points deducted from team score!`,
         });
         onRefreshState();
       } else {
@@ -550,8 +550,7 @@ export const ChallengeCard: React.FC<ChallengeCardProps> = ({
             UNLOCK HINT #{hintToUnlock.index}: {hintToUnlock.title}?
           </h4>
           <p className="mt-2 text-xs text-amber-300 font-mono leading-relaxed max-w-xs">
-            Caution: <strong>-{hintToUnlock.cost} points</strong> will be deducted from this
-            challenge's reward upon final capture.
+            Caution: <strong>-{hintToUnlock.cost || 25} points</strong> will be deducted immediately from your score. (If your score is 0, it will go negative!)
           </p>
           <div className="flex items-center gap-3 mt-5">
             <button
@@ -566,7 +565,7 @@ export const ChallengeCard: React.FC<ChallengeCardProps> = ({
               disabled={isUnlockingHint}
               className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-mono font-black text-xs shadow-[0_0_20px_rgba(245,158,11,0.5)] transition-all"
             >
-              {isUnlockingHint ? 'PURCHASING...' : `Confirm (-${hintToUnlock.cost} pts)`}
+              {isUnlockingHint ? 'PURCHASING...' : `Confirm (-${hintToUnlock.cost || 25} pts)`}
             </button>
           </div>
         </div>

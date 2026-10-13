@@ -173,7 +173,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               <Zap className="w-3 h-3 text-[#00ff66]" />
               TOTAL POINTS
             </div>
-            <div className="text-xl sm:text-2xl font-black text-[#00ff66] mt-0.5 drop-shadow-[0_0_8px_rgba(0,255,102,0.5)]">
+            <div className={`text-xl sm:text-2xl font-black mt-0.5 ${team.score < 0 ? 'text-rose-400 drop-shadow-[0_0_8px_rgba(244,63,94,0.5)]' : 'text-[#00ff66] drop-shadow-[0_0_8px_rgba(0,255,102,0.5)]'}`}>
               {team.score} PTS
             </div>
           </div>

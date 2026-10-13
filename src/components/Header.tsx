@@ -337,7 +337,7 @@ export const Header: React.FC<HeaderProps> = ({
                         </span>
                       )}
                     </div>
-                    <div className="text-[10px] text-[#00ff41] font-bold">
+                    <div className={`text-[10px] font-bold ${team.score < 0 ? 'text-rose-400 font-black' : 'text-[#00ff41]'}`}>
                       {team.score} PTS
                     </div>
                   </div>
@@ -350,7 +350,7 @@ export const Header: React.FC<HeaderProps> = ({
                     <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-800">
                       <div>
                         <div className="font-bold text-white text-xs">{team.teamName}</div>
-                        <div className="text-[10px] text-emerald-400">
+                        <div className={`text-[10px] ${team.score < 0 ? 'text-rose-400 font-bold' : 'text-emerald-400'}`}>
                           RANK #{teamRank} · {team.score} PTS
                         </div>
                       </div>
@@ -552,7 +552,7 @@ export const Header: React.FC<HeaderProps> = ({
                         </span>
                       )}
                     </div>
-                    <div className="text-[10px] text-[#00ff41] font-bold mt-0.5">
+                    <div className={`text-[10px] font-bold mt-0.5 ${team.score < 0 ? 'text-rose-400 font-black' : 'text-[#00ff41]'}`}>
                       {team.score} PTS · {team.members.length} MEMBERS
                     </div>
                   </div>
