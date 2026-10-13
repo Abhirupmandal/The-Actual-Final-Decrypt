@@ -361,7 +361,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
   // Timer Handlers - Full Authority
   const handleTimerAction = async (
-    action: 'start' | 'pause' | 'stop' | 'restart' | 'set' | 'add' | 'subtract' | 'end',
+    action: 'start' | 'pause' | 'stop' | 'restart' | 'reset' | 'set' | 'add' | 'subtract' | 'end',
     seconds?: number
   ) => {
     playCyberBlip(800);
@@ -384,6 +384,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
           setNotification({
             type: 'success',
             text: `Countdown restarted successfully with ${Math.round((seconds || 7200) / 60)} minutes. Submissions live!`,
+          });
+        } else if (action === 'reset') {
+          setNotification({
+            type: 'success',
+            text: 'Countdown timer reset to 02:00:00 (2 hours). Ready to start!',
           });
         } else if (action === 'set') {
           setNotification({
@@ -1450,6 +1455,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 >
                   <RotateCcw className="w-4 h-4" />
                   <span>RESTART TIMER</span>
+                </button>
+
+                {/* RESET TO 2:00:00 */}
+                <button
+                  type="button"
+                  onClick={() => handleTimerAction('reset', 7200)}
+                  className="px-3.5 py-2.5 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/50 hover:bg-indigo-500/30 flex items-center justify-center gap-2 font-bold text-xs cursor-pointer shadow-[0_0_15px_rgba(99,102,241,0.2)] transition-all"
+                  title="Reset the countdown clock back to 02:00:00 (2 hours)"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>RESET TO 2:00:00</span>
                 </button>
 
                 {/* END COMPETITION */}

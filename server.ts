@@ -2407,6 +2407,33 @@ app.post('/api/admin/timer', requireAdminAuth, (req: Request, res: Response) => 
       },
       ip
     );
+  } else if (action === 'reset') {
+    const resetSec = typeof seconds === 'number' && seconds > 0 ? Math.floor(seconds) : 7200;
+    competitionState.status = 'paused';
+    competitionState.remainingSeconds = resetSec;
+    competitionState.durationSeconds = resetSec;
+    competitionState.writeupMode = false;
+
+    const event: ActivityFeedEvent = {
+      id: 'act-' + crypto.randomUUID(),
+      timestamp: Date.now(),
+      type: 'announcement',
+      teamName: 'ADMIN',
+      message: `Competition countdown timer reset to 02:00:00 by Admin. Submissions are held.`,
+    };
+    recordUserActivity(event);
+
+    recordAuditLog(
+      'ADMIN',
+      'ADMIN_CONSOLE',
+      'ADMIN_TIMER_RESET',
+      {
+        action: 'reset',
+        resetSeconds: resetSec,
+        remainingSeconds: competitionState.remainingSeconds,
+      },
+      ip
+    );
   } else if (action === 'restart') {
     const restartSec = typeof seconds === 'number' && seconds > 0 ? Math.floor(seconds) : (competitionState.durationSeconds || 7200);
     competitionState.status = 'running';
