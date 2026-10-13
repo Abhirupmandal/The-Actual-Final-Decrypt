@@ -23,6 +23,7 @@ import { playCyberBlip } from '../utils/audio.ts';
 interface ChallengeSectionProps {
   challenges: PublicChallengeView[];
   teamLoggedIn: boolean;
+  isLockedOrEnded?: boolean;
   onOpenAuthModal: () => void;
   onViewWriteup: (challenge: PublicChallengeView) => void;
   onRefreshState: () => void;
@@ -32,6 +33,7 @@ interface ChallengeSectionProps {
 export const ChallengeSection: React.FC<ChallengeSectionProps> = ({
   challenges,
   teamLoggedIn,
+  isLockedOrEnded = false,
   onOpenAuthModal,
   onViewWriteup,
   onRefreshState,
@@ -355,6 +357,7 @@ export const ChallengeSection: React.FC<ChallengeSectionProps> = ({
               key={chal.id}
               challenge={chal}
               teamLoggedIn={teamLoggedIn}
+              isLockedOrEnded={isLockedOrEnded}
               onOpenAuthModal={onOpenAuthModal}
               onViewWriteup={onViewWriteup}
               onRefreshState={onRefreshState}

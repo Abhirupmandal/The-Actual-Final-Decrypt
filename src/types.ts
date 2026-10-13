@@ -156,6 +156,7 @@ export interface CompetitionState {
     title: string;
     message: string;
     timestamp: number;
+    autoDismissSeconds?: number;
   } | null;
 }
 

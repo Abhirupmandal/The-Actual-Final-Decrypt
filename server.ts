@@ -670,16 +670,91 @@ loadInitialQuestions();
 loadPersistedTeams();
 
 // --- Server-Authoritative Timer & Auto-Submit Engine ---
+// Milestone broadcasts: 1:30h (5400s), 1h (3600s), 30m (1800s), 15m (900s), 5m (300s)
+const AUTOMATIC_TIME_MILESTONES: Record<number, { title: string; message: string }> = {
+  5400: {
+    title: 'TIME REMAINING: 1 HOUR 30 MINUTES',
+    message: 'Official Broadcast: Exactly 1 hour and 30 minutes remain in the challenge. Keep decrypting and pace your strategies!',
+  },
+  3600: {
+    title: 'TIME REMAINING: 1 HOUR',
+    message: 'Official Broadcast: Exactly 1 hour remaining in the challenge! Push your decryption efforts now.',
+  },
+  1800: {
+    title: 'TIME REMAINING: 30 MINUTES',
+    message: 'Official Broadcast: 30 minutes remaining! Half an hour left on the clock—secure your points and finalize submissions.',
+  },
+  900: {
+    title: 'TIME REMAINING: 15 MINUTES',
+    message: 'Critical Broadcast: 15 minutes remaining! Final sprint underway—every second counts!',
+  },
+  300: {
+    title: 'TIME REMAINING: 5 MINUTES',
+    message: 'Final Warning: Only 5 minutes remaining in the challenge! Wrap up your active flags immediately.',
+  },
+};
+
+const triggeredMilestones = new Set<number>();
+let autoDismissAnnouncementTimer: NodeJS.Timeout | null = null;
+
+function resetTriggeredMilestonesFor(remainingSec: number) {
+  for (const milestone of Object.keys(AUTOMATIC_TIME_MILESTONES).map(Number)) {
+    if (remainingSec > milestone) {
+      triggeredMilestones.delete(milestone);
+    }
+  }
+}
+
 setInterval(() => {
   if (competitionState.status === 'running') {
     if (competitionState.remainingSeconds > 0) {
       competitionState.remainingSeconds--;
+
+      // 1.) Automatic Time Milestone Broadcasts (1:30 hrs, 1 hr, 30 mins, 15 mins, 5 mins)
+      const milestone = AUTOMATIC_TIME_MILESTONES[competitionState.remainingSeconds];
+      if (milestone && !triggeredMilestones.has(competitionState.remainingSeconds)) {
+        triggeredMilestones.add(competitionState.remainingSeconds);
+
+        const announcement = {
+          id: 'ann-auto-' + competitionState.remainingSeconds + '-' + Date.now(),
+          title: milestone.title,
+          message: milestone.message,
+          timestamp: Date.now(),
+          autoDismissSeconds: 60,
+        };
+
+        competitionState.announcement = announcement;
+        competitionStateStore.saveState(competitionState);
+
+        const alertEvent: ActivityFeedEvent = {
+          id: 'act-' + crypto.randomUUID(),
+          timestamp: Date.now(),
+          type: 'announcement',
+          teamName: 'SYSTEM BROADCAST',
+          message: `[TIME BROADCAST] ${announcement.title}: ${announcement.message}`,
+        };
+        recordUserActivity(alertEvent);
+
+        io.emit('announcement_broadcast', announcement);
+
+        // Auto-dismiss broadcast after 60 seconds (1 minute max visibility)
+        if (autoDismissAnnouncementTimer) clearTimeout(autoDismissAnnouncementTimer);
+        autoDismissAnnouncementTimer = setTimeout(() => {
+          if (competitionState.announcement?.id === announcement.id) {
+            competitionState.announcement = null;
+            competitionStateStore.saveState(competitionState);
+            io.emit('announcement_cleared');
+          }
+        }, 60000);
+      }
+
+      // 2.) Auto-finalize when timer hits 0
       if (competitionState.remainingSeconds === 0) {
         competitionState.status = 'ended';
         competitionState.remainingSeconds = 0;
         competitionStateStore.saveState(competitionState);
 
-        // 1.) Auto-finalize: calculate final unbiased points and standings for all participants
+        // Auto-finalize: calculate final unbiased points and standings for all participants
         invalidateLeaderboardCache();
         const finalStandings = getSortedLeaderboard();
         leaderboardStore.syncLeaderboard(finalStandings);
@@ -695,7 +770,7 @@ setInterval(() => {
         };
         recordUserActivity(alertEvent);
 
-        // 2.) Broadcast completion and top 3 winners podium to all participant screens
+        // Broadcast completion and top 3 winners podium to all participant screens
         io.emit('competition_ended', { top3, finalStandings });
         broadcastLeaderboard();
         broadcastState();
@@ -2442,6 +2517,7 @@ app.post('/api/admin/timer', requireAdminAuth, (req: Request, res: Response) => 
 
   // Persist updated timer state to SQLite
   competitionStateStore.saveState(competitionState);
+  resetTriggeredMilestonesFor(competitionState.remainingSeconds);
 
   io.emit('timer_tick', {
     status: competitionState.status,
@@ -2468,6 +2544,7 @@ app.post('/api/admin/announcement', requireAdminAuth, (req: Request, res: Respon
     title: sanitizeInput(title || 'COMMAND HQ BROADCAST'),
     message: sanitizeInput(message),
     timestamp: Date.now(),
+    autoDismissSeconds: 60,
   };
 
   competitionState.announcement = announcement;
@@ -2482,6 +2559,16 @@ app.post('/api/admin/announcement', requireAdminAuth, (req: Request, res: Respon
   };
   recordUserActivity(event);
   io.emit('announcement_broadcast', announcement);
+
+  // Auto-dismiss broadcast after 60 seconds (1 minute max visibility)
+  if (autoDismissAnnouncementTimer) clearTimeout(autoDismissAnnouncementTimer);
+  autoDismissAnnouncementTimer = setTimeout(() => {
+    if (competitionState.announcement?.id === announcement.id) {
+      competitionState.announcement = null;
+      competitionStateStore.saveState(competitionState);
+      io.emit('announcement_cleared');
+    }
+  }, 60000);
 
   recordAuditLog(
     'ADMIN',
@@ -2500,6 +2587,10 @@ app.post('/api/admin/announcement', requireAdminAuth, (req: Request, res: Respon
 
 // Clear Announcement
 app.delete('/api/admin/announcement', requireAdminAuth, (req: Request, res: Response) => {
+  if (autoDismissAnnouncementTimer) {
+    clearTimeout(autoDismissAnnouncementTimer);
+    autoDismissAnnouncementTimer = null;
+  }
   competitionState.announcement = null;
   competitionStateStore.saveState(competitionState); // Persist to SQLite
   io.emit('announcement_cleared');

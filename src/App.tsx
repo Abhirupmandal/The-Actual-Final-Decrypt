@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import type {
   CompetitionState,
@@ -28,7 +28,7 @@ import { DisqualificationScreen } from './components/DisqualificationScreen.tsx'
 import { BinaryRainBackground } from './components/BinaryRainBackground.tsx';
 import { TopThreePodiumModal } from './components/TopThreePodiumModal.tsx';
 import { CompetitionEndedDashboard } from './components/CompetitionEndedDashboard.tsx';
-import { playSuccessChime, playCyberBlip } from './utils/audio.ts';
+import { playSuccessChime, playCyberBlip, playClockTick, playCompetitionOverSound } from './utils/audio.ts';
 import { Maximize2, Heart, Lock, ArrowRight, UserPlus, BookOpen, Trophy } from 'lucide-react';
 import { requestAppFullscreen, isAppFullscreen } from './utils/fullscreen.ts';
 
@@ -405,6 +405,9 @@ export default function App() {
     }
   }, [currentTab]);
 
+  // Ref to debounce ticking sound to exactly once per second
+  const lastTickSecondRef = useRef<number | null>(null);
+
   // Initialize Socket.io and Listeners
   useEffect(() => {
     const s = io({
@@ -447,6 +450,19 @@ export default function App() {
     });
 
     s.on('timer_tick', (tick) => {
+      // Authentic mechanical clock ticking sound during the final 60 seconds
+      if (
+        tick.status === 'running' &&
+        typeof tick.remainingSeconds === 'number' &&
+        tick.remainingSeconds <= 60 &&
+        tick.remainingSeconds > 0
+      ) {
+        if (lastTickSecondRef.current !== tick.remainingSeconds) {
+          lastTickSecondRef.current = tick.remainingSeconds;
+          playClockTick(tick.remainingSeconds);
+        }
+      }
+
       setCompetitionState((prev) => {
         const nextMode = tick.writeupMode ?? prev.writeupMode;
         if (!nextMode) {
@@ -470,7 +486,7 @@ export default function App() {
       if (data?.top3) setTopThreeData(data.top3);
       setShowVictoryModal(true);
       fetchState();
-      playSuccessChime();
+      playCompetitionOverSound();
     });
 
     s.on('activity_event', (event: ActivityFeedEvent) => {
@@ -883,6 +899,7 @@ export default function App() {
                   <ChallengeSection
                     challenges={challenges}
                     teamLoggedIn={Boolean(team)}
+                    isLockedOrEnded={competitionState.remainingSeconds <= 0}
                     onOpenAuthModal={() => setIsAuthModalOpen(true)}
                     onViewWriteup={(chal) => setActiveWriteupChallenge(chal)}
                     onRefreshState={fetchState}

@@ -233,37 +233,46 @@ export const Header: React.FC<HeaderProps> = ({
           {/* ================= COLUMN 3 (RIGHT): STATUS, TIMER, SOUND, SIGN IN & MOBILE HAMBURGER ================= */}
           <div className="flex items-center justify-end gap-1.5 sm:gap-2 shrink-0">
             {/* Live Competition Countdown Timer */}
-            {showCompetitionTimer && (
-              <div
-                className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl bg-[#050e18]/90 border text-xs font-mono shadow-inner transition-colors shrink-0 ${
-                  competitionState.status === 'running'
-                    ? 'border-[#00ff41]/40 text-[#00ff41] shadow-[0_0_8px_rgba(0,255,65,0.15)]'
-                    : competitionState.status === 'paused'
-                    ? 'border-amber-500/50 bg-amber-950/20 text-amber-400'
-                    : 'border-red-500/50 bg-red-950/20 text-red-400'
-                }`}
-              >
-                <Clock
-                  className={`w-3.5 h-3.5 shrink-0 ${
-                    competitionState.status === 'running'
-                      ? 'text-[#00ff41] animate-pulse drop-shadow-[0_0_6px_#00ff41]'
+            {showCompetitionTimer && (() => {
+              const isLastMinute = competitionState.status === 'running' && competitionState.remainingSeconds <= 60 && competitionState.remainingSeconds > 0;
+              return (
+                <div
+                  className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-xl border text-xs font-mono shadow-inner transition-colors shrink-0 ${
+                    isLastMinute
+                      ? 'border-red-500/90 bg-red-950/60 text-red-400 shadow-[0_0_18px_rgba(239,68,68,0.55)] animate-pulse font-black'
+                      : competitionState.status === 'running'
+                      ? 'bg-[#050e18]/90 border-[#00ff41]/40 text-[#00ff41] shadow-[0_0_8px_rgba(0,255,65,0.15)]'
                       : competitionState.status === 'paused'
-                      ? 'text-amber-400'
-                      : 'text-red-400'
+                      ? 'border-amber-500/50 bg-amber-950/20 text-amber-400'
+                      : 'border-red-500/50 bg-red-950/20 text-red-400'
                   }`}
-                />
-                <span className="hidden 2xl:inline text-slate-400 text-[10px] uppercase font-bold">
-                  {competitionState.status === 'running'
-                    ? 'TIME:'
-                    : competitionState.status === 'paused'
-                    ? 'PAUSED:'
-                    : 'ENDED:'}
-                </span>
-                <span className="font-bold tracking-wider tabular-nums text-xs">
-                  {formatTime(competitionState.remainingSeconds)}
-                </span>
-              </div>
-            )}
+                >
+                  <Clock
+                    className={`w-3.5 h-3.5 shrink-0 ${
+                      isLastMinute
+                        ? 'text-red-400 animate-bounce drop-shadow-[0_0_8px_#ef4444]'
+                        : competitionState.status === 'running'
+                        ? 'text-[#00ff41] animate-pulse drop-shadow-[0_0_6px_#00ff41]'
+                        : competitionState.status === 'paused'
+                        ? 'text-amber-400'
+                        : 'text-red-400'
+                    }`}
+                  />
+                  <span className="hidden 2xl:inline text-slate-400 text-[10px] uppercase font-bold">
+                    {isLastMinute
+                      ? 'FINAL COUNTDOWN:'
+                      : competitionState.status === 'running'
+                      ? 'TIME:'
+                      : competitionState.status === 'paused'
+                      ? 'PAUSED:'
+                      : 'ENDED:'}
+                  </span>
+                  <span className="font-bold tracking-wider tabular-nums text-xs">
+                    {formatTime(competitionState.remainingSeconds)}
+                  </span>
+                </div>
+              );
+            })()}
 
             {/* Strike Meter Indicator (Desktop - if squad is logged in) */}
             <div className="shrink-0">

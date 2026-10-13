@@ -27,6 +27,7 @@ import { playCyberBlip, playSuccessChime, playErrorBuzz, playHintUnlockSound } f
 interface ChallengeCardProps {
   challenge: PublicChallengeView;
   teamLoggedIn: boolean;
+  isLockedOrEnded?: boolean;
   onOpenAuthModal: () => void;
   onViewWriteup: (challenge: PublicChallengeView) => void;
   onRefreshState: () => void;
@@ -36,6 +37,7 @@ interface ChallengeCardProps {
 export const ChallengeCard: React.FC<ChallengeCardProps> = ({
   challenge,
   teamLoggedIn,
+  isLockedOrEnded = false,
   onOpenAuthModal,
   onViewWriteup,
   onRefreshState,
@@ -65,6 +67,15 @@ export const ChallengeCard: React.FC<ChallengeCardProps> = ({
     e.preventDefault();
     if (!teamLoggedIn) {
       onOpenAuthModal();
+      return;
+    }
+
+    if (isLockedOrEnded) {
+      playErrorBuzz();
+      setStatusMessage({
+        type: 'error',
+        text: 'Competition has concluded. Submission portal is permanently locked.',
+      });
       return;
     }
 
@@ -482,6 +493,11 @@ export const ChallengeCard: React.FC<ChallengeCardProps> = ({
           <div className="w-full min-h-[46px] py-3 px-4 rounded-xl bg-red-950/70 border border-red-500/80 text-red-300 font-mono text-xs font-black tracking-wider flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(239,68,68,0.4),inset_0_0_15px_rgba(239,68,68,0.15)] animate-pulse">
             <ShieldAlert className="w-4 h-4 text-red-400" />
             <span>[LOCKED - 0/{challenge.maxAttempts} ATTEMPTS]</span>
+          </div>
+        ) : isLockedOrEnded ? (
+          <div className="w-full min-h-[46px] py-3 px-4 rounded-xl bg-slate-900/90 border border-slate-700/80 text-slate-400 font-mono text-xs font-black tracking-wider flex items-center justify-center gap-2 shadow-inner">
+            <Lock className="w-4 h-4 text-slate-500" />
+            <span>[PORTAL LOCKED // TIME EXPIRED]</span>
           </div>
         ) : (
           <form onSubmit={handleFlagSubmit} className="flex gap-2">
