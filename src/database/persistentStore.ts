@@ -1464,6 +1464,65 @@ export const leaderboardStore = new SqliteLeaderboardStore(
   () => teamStore.sync()
 );
 
+export function humanizeAuditAction(action: string): string {
+  const map: Record<string, string> = {
+    REGISTRATION: 'Team Registered',
+    LOGIN: 'Team Logged In',
+    LOGOUT: 'Team Logged Out',
+    READY_TO_START: 'Ready & Started Competition',
+    TAB_BLUR_WARNING: 'Switched Tab / Left Window',
+    STRIKE_INCREMENT: 'Strike Issued (Rule Violation)',
+    DISQUALIFICATION: 'Team Disqualified',
+    REINSTATE_TEAM: 'Team Reinstated',
+    FLAG_SUBMISSION: 'Flag Submitted',
+    FLAG_SUBMISSION_CORRECT: 'Correct Flag Solved',
+    FLAG_SUBMISSION_INCORRECT: 'Wrong Flag Submitted',
+    HINT_UNLOCK: 'Hint Purchased',
+    SCREENSHOT_INTERCEPTED: 'Screenshot Attempt Blocked',
+    DEVTOOLS_OPEN: 'Developer Tools Opened',
+    FULLSCREEN_EXIT: 'Exited Fullscreen Mode',
+    ARTIFACT_INSPECTED: 'Clue File Downloaded',
+    ADMIN_TIMER_START: 'Timer Started',
+    ADMIN_TIMER_PAUSE: 'Timer Paused',
+    ADMIN_TIMER_RESUME: 'Timer Resumed',
+    ADMIN_TIMER_RESTART: 'Timer Reset & Restarted',
+    ADMIN_TIMER_SET: 'Timer Duration Set',
+    ADMIN_SCORE_ADJUST: 'Score Adjusted',
+    ADMIN_DISQUALIFY_TEAM: 'Team Disqualified by Admin',
+    ADMIN_CLEAR_STRIKES: 'Strikes Reset',
+    ADMIN_CHALLENGE_CREATE: 'Challenge Added',
+    ADMIN_CHALLENGE_UPDATE: 'Challenge Modified',
+    ADMIN_CHALLENGE_DELETE: 'Challenge Removed',
+    COMPETITION_START: 'Competition Started',
+    COMPETITION_END: 'Competition Concluded',
+    SYSTEM_STARTUP: 'System Service Started',
+    WRITEUP_MODE_ENABLED: 'Solutions Writeup Mode Enabled',
+    WRITEUP_MODE_DISABLED: 'Solutions Writeup Mode Disabled',
+    FEEDBACK_SUBMITTED: 'Feedback Submitted',
+    FEEDBACK_DELETED: 'Feedback Deleted',
+    FEEDBACK_CLEARED: 'All Feedback Cleared',
+  };
+  if (map[action]) return map[action];
+  return action
+    .split('_')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
+export function humanizeAuditActor(actor: string): string {
+  switch (actor.toUpperCase()) {
+    case 'STUDENT':
+    case 'TEAM':
+      return 'Participant Team';
+    case 'ADMIN':
+      return 'Organizer Admin';
+    case 'SYSTEM':
+      return 'Automated System';
+    default:
+      return actor;
+  }
+}
+
 /**
  * Dedicated SQLite Store for Timestamped System-Wide Audit Logs
  * Captures microsecond-precision UTC timestamps across all student and admin events
@@ -1662,14 +1721,16 @@ class SqliteAuditLogStore {
 
   public exportCsv(limit = 5000): string {
     const logs = this.getAll(limit);
-    // Columns: Log ID, Timestamp, Actor Type, Actor Identifier, Action Type, IP Address, Detailed Metadata
-    let csv = 'Log ID,Timestamp,Actor Type,Actor Identifier,Action Type,IP Address,Detailed Metadata\n';
+    // Columns: Entry ID, Date & Time (UTC), User Role, Team / Actor, Action & Event, Network IP, Event Details
+    let csv = 'Entry ID,Date & Time (UTC),User Role,Team / Actor,Action & Event,Network IP,Event Details\n';
     logs.forEach((log) => {
       const escapedId = `"${log.logId.replace(/"/g, '""')}"`;
       const escapedTime = `"${log.timestamp.replace(/"/g, '""')}"`;
-      const escapedActorType = `"${log.actorType.replace(/"/g, '""')}"`;
+      const humanActorType = humanizeAuditActor(log.actorType);
+      const humanAction = humanizeAuditAction(log.actionType);
+      const escapedActorType = `"${humanActorType.replace(/"/g, '""')}"`;
       const escapedActor = `"${log.actorIdentifier.replace(/"/g, '""')}"`;
-      const escapedAction = `"${log.actionType.replace(/"/g, '""')}"`;
+      const escapedAction = `"${humanAction.replace(/"/g, '""')}"`;
       const escapedIp = `"${log.ipAddress.replace(/"/g, '""')}"`;
       const escapedDetails = `"${log.details.replace(/"/g, '""')}"`;
       csv += `${escapedId},${escapedTime},${escapedActorType},${escapedActor},${escapedAction},${escapedIp},${escapedDetails}\n`;

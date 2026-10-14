@@ -3307,21 +3307,24 @@ app.get(['/api/admin/export-audit-csv', '/api/admin/export-audit-logs-csv'], req
   res.send(csv);
 });
 
-// Export Scores to CSV with Secure Sanitization
+// Export Scores to CSV with Secure Sanitization & Humanized Field Names
 app.get(['/api/admin/export-csv', '/api/admin/export-scoreboard-csv'], requireAdminAuth, (_req: Request, res: Response) => {
   const leaderboard = getSortedLeaderboard();
-  let csv = 'Rank,Team Name,Email,Score,Solves,Total Failed Attempts,Last Solve Time,Members,Anomaly Flagged\n';
+  let csv = 'Rank,Team Name,Contact Email,Total Score (Points),Challenges Solved,Wrong Submissions,Latest Solve Time,Team Members,Fair Play Status\n';
 
   leaderboard.forEach((entry) => {
     const teamObj = teamStore.getById(entry.teamId);
     const emailStr = (teamObj?.email || '').replace(/"/g, '""');
     const membersStr = entry.members.join('; ').replace(/"/g, '""');
-    const lastSolveDate = entry.lastSolveTime ? new Date(entry.lastSolveTime).toISOString() : 'N/A';
-    csv += `${entry.rank},"${entry.teamName}","${emailStr}",${entry.score},${entry.solvesCount},${entry.totalFailedAttempts},"${lastSolveDate}","${membersStr}",${entry.isFlaggedAnomaly}\n`;
+    const lastSolveDate = entry.lastSolveTime
+      ? new Date(entry.lastSolveTime).toLocaleString('en-US', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })
+      : 'No Solves Yet';
+    const fairPlayStatus = entry.isFlaggedAnomaly ? 'Flagged for Review' : 'Clean & Verified';
+    csv += `${entry.rank},"${entry.teamName}","${emailStr}",${entry.score},${entry.solvesCount},${entry.totalFailedAttempts},"${lastSolveDate}","${membersStr}","${fairPlayStatus}"\n`;
   });
 
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-  res.setHeader('Content-Disposition', 'attachment; filename="the_final_decrypt_scoreboard.csv"');
+  res.setHeader('Content-Disposition', 'attachment; filename="the_final_decrypt_leaderboard.csv"');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.send(csv);
 });

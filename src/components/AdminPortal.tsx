@@ -56,6 +56,80 @@ import type {
 } from '../types.ts';
 import { playCyberBlip, playSuccessChime, playErrorBuzz } from '../utils/audio.ts';
 
+export const humanizeAuditAction = (action: string): string => {
+  const map: Record<string, string> = {
+    REGISTRATION: 'Team Registered',
+    LOGIN: 'Team Logged In',
+    LOGOUT: 'Team Logged Out',
+    READY_TO_START: 'Ready & Started',
+    TAB_BLUR_WARNING: 'Switched Tab / Left Window',
+    STRIKE_INCREMENT: 'Strike Issued (Rule Violation)',
+    DISQUALIFICATION: 'Team Disqualified',
+    REINSTATE_TEAM: 'Team Reinstated',
+    FLAG_SUBMISSION: 'Flag Submitted',
+    HINT_UNLOCK: 'Hint Purchased',
+    SCREENSHOT_INTERCEPTED: 'Screenshot Blocked',
+    ARTIFACT_INSPECTED: 'Clue File Downloaded',
+    ADMIN_TIMER_START: 'Timer Started',
+    ADMIN_TIMER_PAUSE: 'Timer Paused',
+    ADMIN_TIMER_RESUME: 'Timer Resumed',
+    ADMIN_TIMER_RESTART: 'Timer Restarted',
+    ADMIN_TIMER_SET: 'Timer Duration Set',
+    ADMIN_TIMER_ADD: 'Extra Time Added (+)',
+    ADMIN_TIMER_SUBTRACT: 'Time Deducted (-)',
+    ADMIN_SCORE_ADJUST: 'Score Adjusted',
+    ADMIN_DISQUALIFY_TEAM: 'Team Disqualified by Admin',
+    ADMIN_CLEAR_STRIKES: 'Strikes Reset',
+    ADMIN_CHALLENGE_CREATE: 'Challenge Created',
+    ADMIN_CHALLENGE_UPDATE: 'Challenge Updated',
+    ADMIN_CHALLENGE_DELETE: 'Challenge Deleted',
+    BROADCAST_SENT: 'Announcement Sent',
+    COMPETITION_START: 'Competition Started',
+    COMPETITION_END: 'Competition Concluded',
+    SYSTEM_STARTUP: 'System Service Started',
+    WRITEUP_MODE_ENABLED: 'Solutions Mode Enabled',
+    WRITEUP_MODE_DISABLED: 'Solutions Mode Disabled',
+    FEEDBACK_SUBMITTED: 'Feedback Submitted',
+    FEEDBACK_DELETED: 'Feedback Deleted',
+    FEEDBACK_CLEARED: 'All Feedback Cleared',
+  };
+  if (map[action]) return map[action];
+  return action
+    .split('_')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+};
+
+export const humanizeAuditActor = (actor: string): string => {
+  switch (actor?.toUpperCase()) {
+    case 'STUDENT':
+    case 'TEAM':
+      return 'Participant Team';
+    case 'ADMIN':
+      return 'Organizer Admin';
+    case 'SYSTEM':
+      return 'Automated System';
+    default:
+      return actor || 'System';
+  }
+};
+
+export const humanizeSecurityLogType = (type: string): string => {
+  const map: Record<string, string> = {
+    DEVTOOLS_DETECTED: 'Developer Tools Opened',
+    WINDOW_BLUR: 'Tab Switched / Left Window',
+    SCREENSHOT_ATTEMPT: 'Screenshot Attempt Blocked',
+    RATE_LIMIT_EXCEEDED: 'Too Many Rapid Submissions',
+    SYSTEM_ERROR: 'System Exception Audited',
+    UNAUTHORIZED_ACCESS: 'Unauthorized Access Blocked',
+  };
+  if (map[type]) return map[type];
+  return type
+    .split('_')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+};
+
 interface AdminPortalProps {
   adminToken: string;
   competitionState: CompetitionState;
@@ -3252,54 +3326,59 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
             <div className="bg-[#0d111a] border border-slate-800 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 font-mono text-xs">
               {/* Actor Filter Chips */}
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-slate-500 mr-1 text-[11px]">ACTOR:</span>
-                {(['ALL', 'STUDENT', 'ADMIN', 'SYSTEM'] as const).map((actor) => (
+                <span className="text-slate-500 mr-1 text-[11px]">ROLE:</span>
+                {[
+                  { key: 'ALL', label: 'All Roles' },
+                  { key: 'STUDENT', label: 'Participant Teams' },
+                  { key: 'ADMIN', label: 'Organizer Admins' },
+                  { key: 'SYSTEM', label: 'Automated System' },
+                ].map(({ key, label }) => (
                   <button
-                    key={actor}
-                    onClick={() => setAuditActorFilter(actor)}
+                    key={key}
+                    onClick={() => setAuditActorFilter(key as any)}
                     className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all cursor-pointer ${
-                      auditActorFilter === actor
+                      auditActorFilter === key
                         ? 'bg-cyan-500 text-black shadow-[0_0_8px_rgba(6,182,212,0.4)]'
                         : 'bg-[#080b12] text-slate-400 hover:text-white border border-slate-800'
                     }`}
                   >
-                    {actor}
+                    {label}
                   </button>
                 ))}
               </div>
 
               {/* Action Filter Selector */}
               <div className="flex items-center gap-2">
-                <span className="text-slate-500 text-[11px]">ACTION:</span>
+                <span className="text-slate-500 text-[11px]">EVENT:</span>
                 <select
                   value={auditActionFilter}
                   onChange={(e) => setAuditActionFilter(e.target.value)}
                   className="bg-[#080b12] border border-slate-800 text-slate-200 rounded px-2.5 py-1 text-xs font-mono focus:outline-none focus:border-cyan-500"
                 >
-                  <option value="ALL">ALL ACTIONS</option>
-                  <option value="REGISTRATION">REGISTRATION</option>
-                  <option value="LOGIN">LOGIN</option>
-                  <option value="READY_TO_START">READY_TO_START</option>
-                  <option value="TAB_BLUR_WARNING">TAB_BLUR_WARNING</option>
-                  <option value="STRIKE_INCREMENT">STRIKE_INCREMENT</option>
-                  <option value="DISQUALIFICATION">DISQUALIFICATION</option>
-                  <option value="REINSTATE_TEAM">REINSTATE_TEAM</option>
-                  <option value="FLAG_SUBMISSION">FLAG_SUBMISSION</option>
-                  <option value="HINT_UNLOCK">HINT_UNLOCK</option>
-                  <option value="SCREENSHOT_INTERCEPTED">SCREENSHOT_INTERCEPTED</option>
-                  <option value="ARTIFACT_INSPECTED">ARTIFACT_INSPECTED</option>
-                  <option value="ADMIN_TIMER_START">ADMIN_TIMER_START</option>
-                  <option value="ADMIN_TIMER_PAUSE">ADMIN_TIMER_PAUSE</option>
-                  <option value="ADMIN_TIMER_RESUME">ADMIN_TIMER_RESUME</option>
-                  <option value="ADMIN_TIMER_RESTART">ADMIN_TIMER_RESTART</option>
-                  <option value="ADMIN_TIMER_SET">ADMIN_TIMER_SET</option>
-                  <option value="ADMIN_SCORE_ADJUST">ADMIN_SCORE_ADJUST</option>
-                  <option value="ADMIN_DISQUALIFY_TEAM">ADMIN_DISQUALIFY_TEAM</option>
-                  <option value="ADMIN_CLEAR_STRIKES">ADMIN_CLEAR_STRIKES</option>
-                  <option value="ADMIN_CHALLENGE_CREATE">ADMIN_CHALLENGE_CREATE</option>
-                  <option value="ADMIN_CHALLENGE_UPDATE">ADMIN_CHALLENGE_UPDATE</option>
-                  <option value="ADMIN_CHALLENGE_DELETE">ADMIN_CHALLENGE_DELETE</option>
-                  <option value="BROADCAST_SENT">BROADCAST_SENT</option>
+                  <option value="ALL">All Events</option>
+                  <option value="REGISTRATION">Team Registered</option>
+                  <option value="LOGIN">Team Logged In</option>
+                  <option value="READY_TO_START">Ready & Started</option>
+                  <option value="TAB_BLUR_WARNING">Switched Tab / Left Window</option>
+                  <option value="STRIKE_INCREMENT">Strike Issued</option>
+                  <option value="DISQUALIFICATION">Disqualification</option>
+                  <option value="REINSTATE_TEAM">Team Reinstated</option>
+                  <option value="FLAG_SUBMISSION">Flag Submitted</option>
+                  <option value="HINT_UNLOCK">Hint Purchased</option>
+                  <option value="SCREENSHOT_INTERCEPTED">Screenshot Blocked</option>
+                  <option value="ARTIFACT_INSPECTED">Clue File Downloaded</option>
+                  <option value="ADMIN_TIMER_START">Timer Started</option>
+                  <option value="ADMIN_TIMER_PAUSE">Timer Paused</option>
+                  <option value="ADMIN_TIMER_RESUME">Timer Resumed</option>
+                  <option value="ADMIN_TIMER_RESTART">Timer Restarted</option>
+                  <option value="ADMIN_TIMER_SET">Timer Duration Set</option>
+                  <option value="ADMIN_SCORE_ADJUST">Score Adjusted</option>
+                  <option value="ADMIN_DISQUALIFY_TEAM">Disqualified by Admin</option>
+                  <option value="ADMIN_CLEAR_STRIKES">Strikes Reset</option>
+                  <option value="ADMIN_CHALLENGE_CREATE">Challenge Created</option>
+                  <option value="ADMIN_CHALLENGE_UPDATE">Challenge Updated</option>
+                  <option value="ADMIN_CHALLENGE_DELETE">Challenge Deleted</option>
+                  <option value="BROADCAST_SENT">Announcement Broadcasted</option>
                 </select>
               </div>
 
@@ -3307,7 +3386,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               <div className="w-full sm:w-64">
                 <input
                   type="text"
-                  placeholder="Search actor, action, IP, metadata..."
+                  placeholder="Search team, event, IP, details..."
                   value={auditSearchQuery}
                   onChange={(e) => setAuditSearchQuery(e.target.value)}
                   className="w-full bg-[#080b12] border border-slate-800 rounded px-3 py-1 text-xs text-white placeholder-slate-600 focus:outline-none focus:border-cyan-500 font-mono"
@@ -3340,12 +3419,12 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                             ? 'bg-purple-950 text-purple-300 border border-purple-500/50'
                             : 'bg-cyan-950 text-cyan-300 border border-cyan-500/50'
                         }`}>
-                          {log.actorType}
+                          {humanizeAuditActor(log.actorType)}
                         </span>
 
                         {/* Action Type Badge */}
                         <span className={`px-2 py-0.5 rounded text-[10px] border font-bold ${getActionBadgeColor(log.actionType)}`}>
-                          {log.actionType}
+                          {humanizeAuditAction(log.actionType)}
                         </span>
 
                         {/* Actor Identifier */}
@@ -3661,7 +3740,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               >
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-bold text-white">[{log.type}]</span>
+                    <span className="font-bold text-white">[{humanizeSecurityLogType(log.type)}]</span>
                     {log.teamName && (
                       <span className="text-amber-400 font-bold">Team: {log.teamName}</span>
                     )}
