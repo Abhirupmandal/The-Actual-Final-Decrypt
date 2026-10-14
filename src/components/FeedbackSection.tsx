@@ -249,6 +249,19 @@ export const FeedbackSection: React.FC<FeedbackSectionProps> = ({
               <Sparkles className="w-3.5 h-3.5" />
               <span>Takes ~2 Minutes</span>
             </span>
+
+            <button
+              type="button"
+              onClick={() => {
+                playCyberBlip(800);
+                setShowSpaceshipFlight(true);
+              }}
+              className="px-3 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/40 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer shadow-[0_0_12px_rgba(6,182,212,0.25)]"
+              title="Test the Spaceship Flying Animation"
+            >
+              <Send className="w-3 h-3 text-cyan-400 -rotate-45" />
+              <span>TEST SPACESHIP FLIGHT</span>
+            </button>
           </div>
         </div>
       </div>
