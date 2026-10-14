@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Lock,
+  Unlock,
   Play,
   Pause,
   Square,
@@ -619,21 +620,41 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
   // Writeup Mode Toggle
   const handleToggleWriteupMode = async () => {
+    const canRelease = competitionState.status === 'ended' || competitionState.remainingSeconds <= 0;
+    if (!canRelease && !competitionState.writeupMode) {
+      playErrorBuzz();
+      setNotification({
+        type: 'error',
+        text: 'Writeup release is prohibited while the competition is active or before the timer finishes.',
+      });
+      return;
+    }
     playCyberBlip(800);
     const next = !competitionState.writeupMode;
-    await fetch('/api/admin/writeup-mode', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-admin-token': adminToken,
-      },
-      body: JSON.stringify({ enabled: next }),
-    });
-    setNotification({
-      type: 'info',
-      text: next ? 'Writeup Mode enabled! Solutions visible.' : 'Writeup Mode locked.',
-    });
-    onRefreshState();
+    try {
+      const res = await fetch('/api/admin/writeup-mode', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': adminToken,
+        },
+        body: JSON.stringify({ enabled: next }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        playErrorBuzz();
+        setNotification({ type: 'error', text: data.error || 'Failed to update writeup mode.' });
+        return;
+      }
+      setNotification({
+        type: 'info',
+        text: next ? 'Writeup Mode enabled! Official solutions released to all users.' : 'Writeup Mode locked! Solutions retracted from all users.',
+      });
+      fetchAdminData();
+      onRefreshState();
+    } catch {
+      setNotification({ type: 'error', text: 'Network error updating writeup mode.' });
+    }
   };
 
   // Competition Reset
@@ -1829,34 +1850,85 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
           </div>
 
           {/* Post-Event Writeup Mode Card */}
-          <div className="rounded-xl bg-[#0d111a] border border-slate-800 p-5 space-y-4 font-mono text-xs">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <span className="font-bold text-white text-sm flex items-center gap-2">
-                <BookOpen className="w-4 h-4 text-cyan-400" />
-                POST-EVENT WRITEUP MODE
-              </span>
-              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${competitionState.writeupMode ? 'bg-cyan-500/20 text-cyan-300' : 'bg-slate-800 text-slate-400'}`}>
-                {competitionState.writeupMode ? 'UNLOCKED' : 'LOCKED'}
-              </span>
-            </div>
+          {(() => {
+            const canReleaseWriteups = competitionState.status === 'ended' || competitionState.remainingSeconds <= 0;
+            return (
+              <div className="rounded-xl bg-[#0d111a] border border-slate-800 p-5 space-y-4 font-mono text-xs">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+                  <span className="font-bold text-white text-sm flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-cyan-400" />
+                    POST-EVENT WRITEUP MODE
+                  </span>
+                  {!canReleaseWriteups ? (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950/80 text-amber-400 border border-amber-500/40 flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-amber-400" />
+                      LOCKED (COMPETITION ACTIVE)
+                    </span>
+                  ) : competitionState.writeupMode ? (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/50 flex items-center gap-1 shadow-[0_0_10px_rgba(6,182,212,0.3)]">
+                      <CheckCircle className="w-3 h-3 text-cyan-400" />
+                      UNLOCKED &amp; PUBLIC
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400 border border-slate-700 flex items-center gap-1">
+                      <Lock className="w-3 h-3 text-slate-400" />
+                      LOCKED
+                    </span>
+                  )}
+                </div>
 
-            <p className="text-slate-300 leading-relaxed font-sans text-xs">
-              When toggled on, official challenge walkthroughs, formulas, and flag derivations will be exposed to all participants for post-competition educational debriefs.
-            </p>
+                <p className="text-slate-300 leading-relaxed font-sans text-xs">
+                  When toggled on, official challenge walkthroughs, formulas, and flag derivations will be exposed to all participants for post-competition educational debriefs.
+                </p>
 
-            <div>
-              <button
-                onClick={handleToggleWriteupMode}
-                className={`px-4 py-2 rounded font-bold transition-colors ${
-                  competitionState.writeupMode
-                    ? 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
-                    : 'bg-cyan-500 hover:bg-cyan-400 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]'
-                }`}
-              >
-                {competitionState.writeupMode ? 'LOCK WRITEUPS' : 'RELEASE OFFICIAL WRITEUPS'}
-              </button>
-            </div>
-          </div>
+                {!canReleaseWriteups ? (
+                  <div className="space-y-3">
+                    <button
+                      disabled={true}
+                      className="px-4 py-2.5 rounded font-bold text-xs bg-slate-900/90 text-slate-500 border border-slate-800/80 cursor-not-allowed opacity-60 flex items-center gap-2 shadow-inner"
+                    >
+                      <Lock className="w-3.5 h-3.5 text-slate-500" />
+                      <span>[ LOCKED: AVAILABLE AFTER COMPETITION ENDS ]</span>
+                    </button>
+                    <div className="flex items-start gap-2 p-2.5 rounded-lg bg-amber-950/30 border border-amber-500/30 text-amber-300 text-[11px] font-sans">
+                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                      <span>
+                        Official writeups and solution flags are strictly locked during the competition and before it starts. This button automatically unlocks when the competition timer expires (00:00:00) or when you click &quot;END COMPETITION&quot;.
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <button
+                      onClick={handleToggleWriteupMode}
+                      className={`px-4 py-2.5 rounded font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                        competitionState.writeupMode
+                          ? 'bg-red-950/80 hover:bg-red-900 text-red-300 border border-red-500/60 shadow-[0_0_15px_rgba(239,68,68,0.35)]'
+                          : 'bg-cyan-500 hover:bg-cyan-400 text-black font-black shadow-[0_0_20px_rgba(6,182,212,0.45)]'
+                      }`}
+                    >
+                      {competitionState.writeupMode ? (
+                        <>
+                          <Lock className="w-3.5 h-3.5 text-red-400" />
+                          <span>LOCK WRITEUPS</span>
+                        </>
+                      ) : (
+                        <>
+                          <Unlock className="w-3.5 h-3.5 text-black" />
+                          <span>RELEASE OFFICIAL WRITEUPS</span>
+                        </>
+                      )}
+                    </button>
+                    <p className="text-[11px] font-sans text-slate-400">
+                      {competitionState.writeupMode
+                        ? 'Official step-by-step writeups and solution flags are currently visible to all participants and guests. Click above to immediately lock and retract them.'
+                        : 'The competition has concluded. Click above to release official solutions and writeups to all users.'}
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Instant Broadcast Announcement */}
           <div className="rounded-xl bg-[#0d111a] border border-slate-800 p-5 space-y-4 font-mono text-xs">

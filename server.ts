@@ -477,7 +477,7 @@ function getPublicChallengesForTeam(team?: Team): PublicChallengeView[] {
         attemptsUsed,
         attemptsRemaining: Math.max(0, c.maxAttempts - attemptsUsed),
         firstBloodTeam: c.firstBloodTeam,
-        writeup: (competitionState.status === 'ended' || competitionState.writeupMode) ? c.writeup : undefined,
+        writeup: competitionState.writeupMode ? c.writeup : undefined,
       };
     });
 }
@@ -2756,10 +2756,20 @@ app.post('/api/admin/matrix-speed', requireAdminAuth, (req: Request, res: Respon
   res.json({ success: true, speed, state: competitionState });
 });
 
-// Writeup Mode Toggle
+// Writeup Mode Toggle (Strict Post-Event Only)
 app.post('/api/admin/writeup-mode', requireAdminAuth, (req: Request, res: Response) => {
   const { enabled } = req.body;
-  competitionState.writeupMode = Boolean(enabled);
+  const wantEnabled = Boolean(enabled);
+  const canRelease = competitionState.status === 'ended' || competitionState.remainingSeconds <= 0;
+
+  if (wantEnabled && !canRelease) {
+    return res.status(403).json({
+      success: false,
+      error: 'Official writeups cannot be released while the competition is active or before the timer finishes.',
+    });
+  }
+
+  competitionState.writeupMode = wantEnabled;
   competitionStateStore.saveState(competitionState); // Persist to SQLite
   redisCache.invalidate('cache:state');
   redisCache.invalidate('cache:state:public');

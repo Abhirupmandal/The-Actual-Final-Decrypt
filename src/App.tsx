@@ -261,12 +261,12 @@ export default function App() {
   const [activeWriteupChallenge, setActiveWriteupChallenge] = useState<PublicChallengeView | null>(null);
   const [activeArtifactChallengeId, setActiveArtifactChallengeId] = useState<string | null>(null);
 
-  // Auto-close writeup modal on user side when admin locks writeups (unless tournament has concluded)
+  // Auto-close writeup modal on user side when admin locks writeups
   useEffect(() => {
-    if (!competitionState.writeupMode && competitionState.status !== 'ended') {
+    if (!competitionState.writeupMode) {
       setActiveWriteupChallenge(null);
     }
-  }, [competitionState.writeupMode, competitionState.status]);
+  }, [competitionState.writeupMode]);
 
   // Standalone Artifact Viewer Tab Routing (/viewer/:challengeId)
   const [standaloneViewerChallengeId, setStandaloneViewerChallengeId] = useState<string | null>(() => {
@@ -990,13 +990,15 @@ export default function App() {
                             </div>
                             <div>
                               <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[10px] font-mono font-bold uppercase tracking-wider mb-1">
-                                <span>TOURNAMENT ARCHIVE · OFFICIAL SOLUTIONS UNLOCKED</span>
+                                <span>{competitionState.writeupMode ? 'TOURNAMENT ARCHIVE · OFFICIAL SOLUTIONS UNLOCKED' : 'TOURNAMENT ARCHIVE · CHALLENGE REPOSITORY'}</span>
                               </div>
                               <h2 className="text-base sm:text-lg font-black text-white font-mono uppercase tracking-tight">
-                                CHALLENGE REPOSITORY &amp; WRITEUPS
+                                {competitionState.writeupMode ? 'CHALLENGE REPOSITORY & WRITEUPS' : 'CHALLENGE REPOSITORY'}
                               </h2>
                               <p className="text-xs text-slate-300 font-sans mt-0.5">
-                                Browse all competition challenges and open official step-by-step solutions and flag breakdowns below.
+                                {competitionState.writeupMode
+                                  ? 'Browse all competition challenges and open official step-by-step solutions and flag breakdowns below.'
+                                  : 'Browse all competition challenges. Official writeups and solution debriefs are currently locked by administration.'}
                               </p>
                             </div>
                           </div>
@@ -1066,9 +1068,10 @@ export default function App() {
                     <CompetitionEndedDashboard
                       leaderboard={leaderboard}
                       currentTeam={team}
-                      writeupMode={Boolean(competitionState.writeupMode || competitionState.status === 'ended')}
+                      writeupMode={Boolean(competitionState.writeupMode)}
                       onReplayRocketLaunch={() => setShowRocketLaunch(true)}
                       onOpenWriteupPortal={() => {
+                        if (!competitionState.writeupMode) return;
                         const available = challenges.filter((c) => Boolean(c.writeup));
                         if (available.length > 0) {
                           setActiveWriteupChallenge(available[0]);
@@ -1326,9 +1329,9 @@ export default function App() {
         onDismiss={handleDismissAnnouncement}
       />
 
-      {Boolean((competitionState.writeupMode || competitionState.status === 'ended') && activeWriteupChallenge) && (
+      {Boolean(competitionState.writeupMode && activeWriteupChallenge) && (
         <WriteupModal
-          isOpen={Boolean((competitionState.writeupMode || competitionState.status === 'ended') && activeWriteupChallenge)}
+          isOpen={Boolean(competitionState.writeupMode && activeWriteupChallenge)}
           challenge={activeWriteupChallenge}
           challenges={challenges.filter((c) => Boolean(c.writeup))}
           onSelectChallenge={(c) => setActiveWriteupChallenge(c)}
