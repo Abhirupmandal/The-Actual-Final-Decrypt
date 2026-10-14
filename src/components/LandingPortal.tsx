@@ -322,6 +322,11 @@ export const LandingPortal: React.FC<LandingPortalProps> = ({
               <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-semibold">
                 Anuj
               </span>
+              <span className="text-slate-600 hidden sm:inline">|</span>
+              <span className="text-amber-400 font-medium">Special Thanks:</span>
+              <span className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 font-semibold">
+                Tester Sagar
+              </span>
             </div>
           </div>
         </div>

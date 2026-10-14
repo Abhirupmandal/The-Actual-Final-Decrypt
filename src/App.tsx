@@ -1130,6 +1130,9 @@ export default function App() {
               <span className="text-slate-300 font-semibold bg-slate-900 px-2 py-0.5 rounded border border-slate-700">Shrikant</span>
               <span>&amp;</span>
               <span className="text-slate-300 font-semibold bg-slate-900 px-2 py-0.5 rounded border border-slate-700">Anuj</span>
+              <span className="text-slate-600 hidden sm:inline">|</span>
+              <span className="text-amber-400">Special Thanks:</span>
+              <span className="text-amber-300 font-semibold bg-amber-950/60 px-2 py-0.5 rounded border border-amber-500/40">Tester Sagar</span>
             </span>
           </div>
 
