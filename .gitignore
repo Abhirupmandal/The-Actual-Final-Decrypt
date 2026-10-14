@@ -13,6 +13,8 @@ data/*.sqlite*
 data/*.key
 data/*.tmp*
 data/*.json
+!data/baseline_seed.json
+!data/teams.json
 ORGANIZER_ANSWER_KEY.md
 *load_test*.py
 clean_loadtest_teams.py

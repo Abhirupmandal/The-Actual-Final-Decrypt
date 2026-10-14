@@ -29,6 +29,7 @@ const PROJECT_ROOT = path.resolve(__dirname, '../../');
 const DATA_DIR = path.join(PROJECT_ROOT, 'data');
 const SQLITE_FILE = path.join(DATA_DIR, 'ctf_database.sqlite');
 const TEAMS_JSON_FILE = path.join(DATA_DIR, 'teams.json');
+const BASELINE_SEED_FILE = path.join(DATA_DIR, 'baseline_seed.json');
 
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
@@ -1868,6 +1869,129 @@ export const feedbackStore = new SqliteFeedbackStore(
   teamStore.getDb(),
   () => teamStore.sync()
 );
+
+/**
+ * Ensures baseline records (previous logins, teams, audit trail) are ALWAYS restored
+ * even on fresh ephemeral containers or empty databases.
+ */
+function loadBaselineSeedIfEmpty(): void {
+  if (!fs.existsSync(BASELINE_SEED_FILE)) return;
+  try {
+    const raw = fs.readFileSync(BASELINE_SEED_FILE, 'utf-8');
+    const seed = JSON.parse(raw);
+
+    // 1. Teams
+    if (teamStore.getAll().length === 0 && Array.isArray(seed.teams) && seed.teams.length > 0) {
+      console.log(`[Baseline Seed] Ingesting ${seed.teams.length} baseline teams into SQLite...`);
+      for (const row of seed.teams) {
+        const team: Team = {
+          id: String(row.id),
+          teamName: String(row.team_name),
+          email: row.email ? String(row.email) : undefined,
+          passwordHash: row.password_hash ? String(row.password_hash) : undefined,
+          passwordSalt: row.password_salt ? String(row.password_salt) : undefined,
+          members: typeof row.members === 'string' ? JSON.parse(row.members || '[]') : (row.members || []),
+          score: Number(row.score || 0),
+          solves: typeof row.solves === 'string' ? JSON.parse(row.solves || '{}') : (row.solves || {}),
+          hintsUnlocked: typeof row.hints_unlocked === 'string' ? JSON.parse(row.hints_unlocked || '{}') : (row.hints_unlocked || {}),
+          failedAttempts: typeof row.failed_attempts === 'string' ? JSON.parse(row.failed_attempts || '{}') : (row.failed_attempts || {}),
+          totalFailedAttempts: Number(row.total_failed_attempts || 0),
+          lastSolveTime: Number(row.last_solve_time || 0),
+          registeredAt: Number(row.registered_at || Date.now()),
+          ip: String(row.ip || '127.0.0.1'),
+          strikes: Number(row.strikes || 0),
+          isDisqualified: Boolean(row.is_disqualified),
+          disqualifiedReason: row.disqualified_reason ? String(row.disqualified_reason) : undefined,
+          disqualifiedAt: row.disqualified_at ? Number(row.disqualified_at) : undefined,
+          isFlaggedAnomaly: Boolean(row.is_flagged_anomaly),
+          anomalyReason: row.anomaly_reason ? String(row.anomaly_reason) : undefined,
+          hasStarted: Boolean(row.has_started),
+          startedAt: row.started_at ? Number(row.started_at) : undefined,
+        };
+        teamStore.upsertFromPostgres(team);
+      }
+    }
+
+    // 2. Audit Logs
+    if (auditLogStore.count() === 0 && Array.isArray(seed.audit_logs) && seed.audit_logs.length > 0) {
+      console.log(`[Baseline Seed] Ingesting ${seed.audit_logs.length} baseline audit logs into SQLite...`);
+      for (const row of seed.audit_logs) {
+        const log: AuditLog = {
+          logId: String(row.log_id || row.id || ('audit-' + crypto.randomUUID())),
+          actorType: String(row.actor_type || 'SYSTEM') as any,
+          actorIdentifier: String(row.actor_identifier || 'SYSTEM'),
+          actionType: String(row.action_type || 'SYSTEM_INFO') as any,
+          details: String(row.details || '{}'),
+          ipAddress: String(row.ip_address || '127.0.0.1'),
+          timestamp: String(row.timestamp || new Date(Number(row.timestamp_ms || Date.now())).toISOString()),
+          timestampMs: Number(row.timestamp_ms || Date.now()),
+        };
+        auditLogStore.upsertFromPostgres(log);
+      }
+    }
+
+    // 3. Activity Feed
+    if (activityFeedStore.getRecent(10).length === 0 && Array.isArray(seed.activity_feed) && seed.activity_feed.length > 0) {
+      console.log(`[Baseline Seed] Ingesting ${seed.activity_feed.length} baseline activity events into SQLite...`);
+      for (const row of seed.activity_feed) {
+        const ev: ActivityFeedEvent = {
+          id: String(row.id || ('act-' + crypto.randomUUID())),
+          timestamp: Number(row.timestamp || Date.now()),
+          type: row.type as any,
+          teamName: String(row.team_name || 'Team'),
+          challengeTitle: row.challenge_title ? String(row.challenge_title) : undefined,
+          points: row.points !== null && row.points !== undefined ? Number(row.points) : undefined,
+          message: String(row.message || ''),
+        };
+        activityFeedStore.upsertFromPostgres(ev);
+      }
+    }
+
+    // 4. Security Logs
+    if (securityLogStore.getAll(10).length === 0 && Array.isArray(seed.security_logs) && seed.security_logs.length > 0) {
+      console.log(`[Baseline Seed] Ingesting ${seed.security_logs.length} baseline security logs into SQLite...`);
+      for (const row of seed.security_logs) {
+        const sl: SecurityLog = {
+          id: String(row.id || ('sec-' + crypto.randomUUID())),
+          timestamp: Number(row.timestamp || Date.now()),
+          teamName: row.team_name ? String(row.team_name) : undefined,
+          ip: String(row.ip || '127.0.0.1'),
+          type: row.type as any,
+          details: String(row.details || ''),
+          severity: row.severity as any,
+        };
+        securityLogStore.upsertFromPostgres(sl);
+      }
+    }
+
+    // 5. Submissions
+    if (submissionStore.getRecent(10).length === 0 && Array.isArray(seed.submissions) && seed.submissions.length > 0) {
+      console.log(`[Baseline Seed] Ingesting ${seed.submissions.length} baseline submissions into SQLite...`);
+      for (const row of seed.submissions) {
+        const sub: SubmissionRecord = {
+          id: String(row.id || ('sub-' + crypto.randomUUID())),
+          teamId: String(row.team_id),
+          teamName: String(row.team_name || ''),
+          challengeId: String(row.challenge_id),
+          challengeTitle: row.challenge_title ? String(row.challenge_title) : undefined,
+          submittedFlag: String(row.submitted_flag || ''),
+          isCorrect: Boolean(row.is_correct),
+          pointsAwarded: Number(row.points_awarded || 0),
+          timestamp: Number(row.timestamp || Date.now()),
+          ip: String(row.ip || '127.0.0.1'),
+        };
+        submissionStore.upsertFromPostgres(sub);
+      }
+    }
+
+    teamStore.flushToDisk();
+  } catch (err) {
+    console.error('[Baseline Seed] Error applying baseline seed:', err);
+  }
+}
+
+// Ingest baseline seed immediately so memory & SQLite are populated
+loadBaselineSeedIfEmpty();
 
 // Auto-initialize remote PostgreSQL sync on server boot if DATABASE_URL is configured
 if (postgresSync.isEnabled()) {
