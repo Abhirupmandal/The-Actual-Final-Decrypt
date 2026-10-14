@@ -21,6 +21,7 @@ interface AuthModalProps {
   onClose: () => void;
   onSuccess: (team: any, token: string) => void;
   onAdminSuccess?: (token: string, adminName?: string) => void;
+  isCompetitionEnded?: boolean;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -28,8 +29,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   onSuccess,
   onAdminSuccess,
+  isCompetitionEnded = false,
 }) => {
-  const [activeTab, setActiveTab] = useState<'signup' | 'login'>('signup');
+  const [activeTab, setActiveTab] = useState<'signup' | 'login'>(() => (isCompetitionEnded ? 'login' : 'signup'));
 
   // Sign Up Form State
   const [signupTeamName, setSignupTeamName] = useState('');
@@ -92,6 +94,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleSignupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (isCompetitionEnded) {
+      setError('Tournament registration is closed. The competition has concluded.');
+      playErrorBuzz();
+      return;
+    }
 
     if (!signupTeamName.trim() || signupTeamName.trim().length < 3) {
       setError('Team name must contain at least 3 characters.');
@@ -243,17 +251,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             type="button"
             onClick={() => {
               playCyberBlip(700);
+              if (isCompetitionEnded) {
+                setError('Tournament registration is closed. The competition has concluded.');
+                playErrorBuzz();
+                return;
+              }
               setActiveTab('signup');
               setError(null);
             }}
+            disabled={isCompetitionEnded}
             className={`flex-1 min-h-[44px] py-2 px-2 rounded-lg font-bold text-center transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeTab === 'signup'
+              isCompetitionEnded
+                ? 'opacity-40 cursor-not-allowed text-slate-500'
+                : activeTab === 'signup'
                 ? 'bg-[#00ff66] text-black shadow-[0_0_12px_rgba(0,255,102,0.25)]'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
             <UserCheck className="w-3.5 h-3.5" />
-            <span>SIGN UP (NEW TEAM)</span>
+            <span>{isCompetitionEnded ? '[ REGISTRATION CLOSED ]' : 'SIGN UP (NEW TEAM)'}</span>
           </button>
 
           <button

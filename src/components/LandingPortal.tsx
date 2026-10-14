@@ -18,6 +18,7 @@ import {
   CheckCircle,
   Zap,
   Mail,
+  BookOpen,
 } from 'lucide-react';
 import { playCyberBlip, playSuccessChime, playErrorBuzz } from '../utils/audio.ts';
 
@@ -25,14 +26,18 @@ interface LandingPortalProps {
   onSuccess: (team: any, token: string) => void;
   onAdminSuccess?: (token: string, adminName?: string) => void;
   onExploreScoreboard: () => void;
+  isCompetitionEnded?: boolean;
+  onViewChallenges?: () => void;
 }
 
 export const LandingPortal: React.FC<LandingPortalProps> = ({
   onSuccess,
   onAdminSuccess,
   onExploreScoreboard,
+  isCompetitionEnded = false,
+  onViewChallenges,
 }) => {
-  const [activeTab, setActiveTab] = useState<'signup' | 'login'>('signup');
+  const [activeTab, setActiveTab] = useState<'signup' | 'login'>(() => (isCompetitionEnded ? 'login' : 'signup'));
 
   // Sign Up Form State
   const [signupTeamName, setSignupTeamName] = useState('');
@@ -228,21 +233,29 @@ export const LandingPortal: React.FC<LandingPortalProps> = ({
       <div className="max-w-6xl w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
         {/* Left Column: Cyberpunk Hero Banner & Intelligence Briefing */}
         <div className="lg:col-span-6 space-y-6">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#00ff66]/10 border border-[#00ff66]/40 text-[#00ff66] text-xs font-bold shadow-[0_0_15px_rgba(0,255,102,0.2)]">
-            <span className="w-2 h-2 rounded-full bg-[#00ff66] animate-ping" />
-            <span>COMPETITION REGISTRATION &amp; SIGN IN</span>
-          </div>
+          {isCompetitionEnded ? (
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/40 text-amber-400 text-xs font-bold shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+              <Trophy className="w-3.5 h-3.5 text-amber-400" />
+              <span>TOURNAMENT CONCLUDED - ARCHIVE MODE</span>
+            </div>
+          ) : (
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#00ff66]/10 border border-[#00ff66]/40 text-[#00ff66] text-xs font-bold shadow-[0_0_15px_rgba(0,255,102,0.2)]">
+              <span className="w-2 h-2 rounded-full bg-[#00ff66] animate-ping" />
+              <span>COMPETITION REGISTRATION &amp; SIGN IN</span>
+            </div>
+          )}
 
           <div>
             <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight leading-tight">
               <span className="text-[#00ff66] animate-neon-pulse">&gt; THE FINAL DECRYPT</span>
               <span className="block text-2xl sm:text-3xl text-[#00f0ff] mt-1 font-extrabold">
-                ROUND 2: NO CLUE, NO MERCY
+                {isCompetitionEnded ? 'EVENT CONCLUDED: ARCHIVE & SOLUTIONS' : 'ROUND 2: NO CLUE, NO MERCY'}
               </span>
             </h1>
             <p className="mt-3 text-sm sm:text-base text-slate-300 font-sans leading-relaxed">
-              Welcome to The Final Decrypt competition. Compete across cryptography, web security,
-              digital forensics, reverse engineering, and problem solving with live scoring and fair play protection.
+              {isCompetitionEnded
+                ? 'The official competition timer has expired. The tournament rankings are finalized and all challenge debriefs, puzzles, and solutions are now open for public inspection.'
+                : 'Welcome to The Final Decrypt competition. Compete across cryptography, web security, digital forensics, reverse engineering, and problem solving with live scoring and fair play protection.'}
             </p>
           </div>
 
@@ -290,16 +303,43 @@ export const LandingPortal: React.FC<LandingPortalProps> = ({
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <button
-              onClick={() => {
-                playCyberBlip(700);
-                onExploreScoreboard();
-              }}
-              className="px-4 py-2 rounded-xl bg-[#080b12] hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <Trophy className="w-3.5 h-3.5 text-[#00f0ff]" />
-              <span>Preview Live Scoreboard as Guest</span>
-            </button>
+            {isCompetitionEnded ? (
+              <>
+                <button
+                  onClick={() => {
+                    playCyberBlip(700);
+                    onExploreScoreboard();
+                  }}
+                  className="px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-black font-black uppercase text-xs tracking-wider flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all cursor-pointer"
+                >
+                  <Trophy className="w-4 h-4 text-black" />
+                  <span>View Final Leaderboard</span>
+                </button>
+                {onViewChallenges && (
+                  <button
+                    onClick={() => {
+                      playCyberBlip(700);
+                      onViewChallenges();
+                    }}
+                    className="px-5 py-3 rounded-xl bg-[#080b12] hover:bg-slate-800 text-slate-200 hover:text-white border border-slate-700 text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <BookOpen className="w-4 h-4 text-cyan-400" />
+                    <span>Explore Challenges &amp; Solutions</span>
+                  </button>
+                )}
+              </>
+            ) : (
+              <button
+                onClick={() => {
+                  playCyberBlip(700);
+                  onExploreScoreboard();
+                }}
+                className="px-4 py-2 rounded-xl bg-[#080b12] hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-800 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Trophy className="w-3.5 h-3.5 text-[#00f0ff]" />
+                <span>Preview Live Scoreboard as Guest</span>
+              </button>
+            )}
           </div>
 
           {/* Developer Credits Card */}
@@ -342,18 +382,25 @@ export const LandingPortal: React.FC<LandingPortalProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  if (isCompetitionEnded) {
+                    playErrorBuzz();
+                    setError('Tournament registration is closed. New squads cannot register for an expired tournament.');
+                    return;
+                  }
                   playCyberBlip(700);
                   setActiveTab('signup');
                   setError(null);
                 }}
                 className={`flex-1 py-2.5 rounded-lg font-bold text-xs text-center transition-all flex items-center justify-center gap-1.5 ${
-                  activeTab === 'signup'
-                    ? 'bg-[#00ff66] text-black shadow-[0_0_15px_rgba(0,255,102,0.35)]'
-                    : 'text-slate-400 hover:text-white'
+                  isCompetitionEnded
+                    ? 'opacity-50 text-slate-500 cursor-not-allowed'
+                    : activeTab === 'signup'
+                    ? 'bg-[#00ff66] text-black shadow-[0_0_15px_rgba(0,255,102,0.35)] cursor-pointer'
+                    : 'text-slate-400 hover:text-white cursor-pointer'
                 }`}
               >
                 <UserCheck className="w-4 h-4" />
-                <span>REGISTER NEW TEAM</span>
+                <span>{isCompetitionEnded ? 'REGISTRATION CLOSED' : 'REGISTER NEW TEAM'}</span>
               </button>
 
               <button
@@ -363,14 +410,14 @@ export const LandingPortal: React.FC<LandingPortalProps> = ({
                   setActiveTab('login');
                   setError(null);
                 }}
-                className={`flex-1 py-2.5 rounded-lg font-bold text-xs text-center transition-all flex items-center justify-center gap-1.5 ${
+                className={`flex-1 py-2.5 rounded-lg font-bold text-xs text-center transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                   activeTab === 'login'
                     ? 'bg-[#00ff66] text-black shadow-[0_0_15px_rgba(0,255,102,0.35)]'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
                 <LogIn className="w-4 h-4" />
-                <span>LOG IN</span>
+                <span>{isCompetitionEnded ? 'PARTICIPANT SQUAD LOG IN' : 'LOG IN'}</span>
               </button>
             </div>
 

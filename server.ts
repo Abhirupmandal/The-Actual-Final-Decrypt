@@ -477,7 +477,7 @@ function getPublicChallengesForTeam(team?: Team): PublicChallengeView[] {
         attemptsUsed,
         attemptsRemaining: Math.max(0, c.maxAttempts - attemptsUsed),
         firstBloodTeam: c.firstBloodTeam,
-        writeup: competitionState.writeupMode ? c.writeup : undefined,
+        writeup: (competitionState.status === 'ended' || competitionState.writeupMode) ? c.writeup : undefined,
       };
     });
 }
@@ -892,6 +892,13 @@ app.use('/api/auth', authRateLimiter);
 
 // 1.) Dedicated Secure Team Sign Up
 app.post('/api/auth/signup', (req: Request, res: Response) => {
+  if (competitionState.status === 'ended') {
+    return res.status(403).json({
+      success: false,
+      error: 'Tournament registration is closed. The competition has concluded.',
+    });
+  }
+
   const ip = getClientIp(req);
 
   // Rate Limiting Protection against spam squad registrations
@@ -1171,6 +1178,13 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
 
 // Participant Registration / Login with Zod & Rate Limiting (Legacy compatibility)
 app.post('/api/auth/team', (req: Request, res: Response) => {
+  if (competitionState.status === 'ended') {
+    return res.status(403).json({
+      success: false,
+      error: 'Tournament registration is closed. The competition has concluded.',
+    });
+  }
+
   const ip = getClientIp(req);
 
   // Rate Limiting: Max 10 team creations per minute per IP

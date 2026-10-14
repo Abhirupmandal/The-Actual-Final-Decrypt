@@ -31,7 +31,7 @@ import { LeaderboardTopThreePreview } from './components/LeaderboardTopThreePrev
 import { RocketLaunchModal } from './components/RocketLaunchModal.tsx';
 import { CompetitionEndedDashboard } from './components/CompetitionEndedDashboard.tsx';
 import { playSuccessChime, playCyberBlip, playClockTick, playCompetitionOverSound } from './utils/audio.ts';
-import { Maximize2, Heart, Lock, ArrowRight, UserPlus, BookOpen, Trophy } from 'lucide-react';
+import { Maximize2, Heart, Lock, ArrowRight, UserPlus, BookOpen, Trophy, Users, LogIn } from 'lucide-react';
 import { requestAppFullscreen, isAppFullscreen } from './utils/fullscreen.ts';
 
 function GuestRestrictedTabCard({
@@ -40,12 +40,16 @@ function GuestRestrictedTabCard({
   onOpenAuthModal,
   onNavigateToRules,
   onNavigateToLeaderboard,
+  authButtonText,
+  rulesButtonText,
 }: {
   title: string;
   description: string;
   onOpenAuthModal: () => void;
   onNavigateToRules: () => void;
   onNavigateToLeaderboard: () => void;
+  authButtonText?: string;
+  rulesButtonText?: string;
 }) {
   return (
     <div className="max-w-xl mx-auto my-12 p-6 sm:p-10 rounded-3xl bg-[#080e18]/90 border border-slate-800 text-center font-mono space-y-5 shadow-[0_0_50px_rgba(0,255,65,0.1)] animate-fadeIn relative overflow-hidden backdrop-blur-xl">
@@ -76,7 +80,7 @@ function GuestRestrictedTabCard({
           className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#00ff41] hover:bg-[#00ff41]/90 text-black font-black uppercase text-xs tracking-wider shadow-[0_0_25px_rgba(0,255,65,0.4)] transition-all cursor-pointer inline-flex items-center justify-center gap-2"
         >
           <UserPlus className="w-4 h-4 text-black" />
-          <span>SIGN UP / LOG IN SQUAD</span>
+          <span>{authButtonText || 'SIGN UP / LOG IN SQUAD'}</span>
         </button>
 
         <button
@@ -87,7 +91,7 @@ function GuestRestrictedTabCard({
           className="w-full sm:w-auto px-5 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-bold uppercase text-xs tracking-wider transition-all cursor-pointer inline-flex items-center justify-center gap-2"
         >
           <BookOpen className="w-4 h-4 text-[#00ff41]" />
-          <span>RULES & INFO</span>
+          <span>{rulesButtonText || 'RULES & INFO'}</span>
         </button>
 
         <button
@@ -165,6 +169,7 @@ export default function App() {
 
   // Application Views
   const [currentTab, setCurrentTab] = useState<AppTab>('challenges');
+  const [guestViewingArchive, setGuestViewingArchive] = useState<boolean>(false);
 
   // Mandatory Post-Event Feedback Submission Gate
   const [hasSubmittedFeedback, setHasSubmittedFeedback] = useState<boolean>(() => {
@@ -256,12 +261,12 @@ export default function App() {
   const [activeWriteupChallenge, setActiveWriteupChallenge] = useState<PublicChallengeView | null>(null);
   const [activeArtifactChallengeId, setActiveArtifactChallengeId] = useState<string | null>(null);
 
-  // Auto-close writeup modal on user side when admin locks writeups
+  // Auto-close writeup modal on user side when admin locks writeups (unless tournament has concluded)
   useEffect(() => {
-    if (!competitionState.writeupMode) {
+    if (!competitionState.writeupMode && competitionState.status !== 'ended') {
       setActiveWriteupChallenge(null);
     }
-  }, [competitionState.writeupMode]);
+  }, [competitionState.writeupMode, competitionState.status]);
 
   // Standalone Artifact Viewer Tab Routing (/viewer/:challengeId)
   const [standaloneViewerChallengeId, setStandaloneViewerChallengeId] = useState<string | null>(() => {
@@ -964,7 +969,82 @@ export default function App() {
             {currentTab === 'challenges' && (
               <>
                 {competitionState.status === 'ended' ? (
-                  !hasSubmittedFeedback ? (
+                  !team ? (
+                    guestViewingArchive ? (
+                      <div className="space-y-6">
+                        {/* Tournament Concluded Archive Header Banner */}
+                        <div className="p-4 sm:p-6 rounded-2xl bg-gradient-to-r from-[#050e18] via-[#091522] to-[#050e18] border border-cyan-500/40 shadow-[0_0_30px_rgba(0,240,255,0.15)] flex flex-col md:flex-row items-center justify-between gap-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-xl bg-cyan-500/10 border border-cyan-500/40 flex items-center justify-center text-cyan-400 shrink-0 shadow-[0_0_15px_rgba(0,240,255,0.25)]">
+                              <BookOpen className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[10px] font-mono font-bold uppercase tracking-wider mb-1">
+                                <span>TOURNAMENT ARCHIVE · OFFICIAL SOLUTIONS UNLOCKED</span>
+                              </div>
+                              <h2 className="text-base sm:text-lg font-black text-white font-mono uppercase tracking-tight">
+                                CHALLENGE REPOSITORY &amp; WRITEUPS
+                              </h2>
+                              <p className="text-xs text-slate-300 font-sans mt-0.5">
+                                Browse all competition challenges and open official step-by-step solutions and flag breakdowns below.
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 w-full md:w-auto shrink-0">
+                            <button
+                              onClick={() => {
+                                playCyberBlip(750);
+                                setGuestViewingArchive(false);
+                              }}
+                              className="flex-1 md:flex-initial px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white border border-slate-700 text-xs font-mono font-bold transition-all cursor-pointer"
+                            >
+                              Home Portal
+                            </button>
+                            <button
+                              onClick={() => {
+                                playCyberBlip(750);
+                                setCurrentTab('leaderboard');
+                              }}
+                              className="flex-1 md:flex-initial px-4 py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/50 text-xs font-mono font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-[0_0_15px_rgba(245,158,11,0.2)]"
+                            >
+                              <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                              <span>Leaderboard</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                playCyberBlip(750);
+                                setIsAuthModalOpen(true);
+                              }}
+                              className="flex-1 md:flex-initial px-4 py-2.5 rounded-xl bg-[#00ff41] hover:bg-[#00ff41]/90 text-black text-xs font-mono font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-[0_0_15px_rgba(0,255,65,0.3)]"
+                            >
+                              <LogIn className="w-3.5 h-3.5 text-black" />
+                              <span>Squad Log In</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Public Archive Challenge Marketplace (Read-only + Writeups) */}
+                        <ChallengeSection
+                          challenges={challenges}
+                          teamLoggedIn={false}
+                          isLockedOrEnded={true}
+                          onOpenAuthModal={() => setIsAuthModalOpen(true)}
+                          onViewWriteup={(chal) => setActiveWriteupChallenge(chal)}
+                          onRefreshState={fetchState}
+                          onViewArtifact={(chalId) => setActiveArtifactChallengeId(chalId)}
+                        />
+                      </div>
+                    ) : (
+                      <LandingPortal
+                        onSuccess={handleTeamLoginSuccess}
+                        onAdminSuccess={handleAdminLoginSuccess}
+                        onExploreScoreboard={() => setCurrentTab('leaderboard')}
+                        isCompetitionEnded={true}
+                        onViewChallenges={() => setGuestViewingArchive(true)}
+                      />
+                    )
+                  ) : !hasSubmittedFeedback ? (
                     <FeedbackSection
                       team={team}
                       isMandatoryIntermission={true}
@@ -976,10 +1056,9 @@ export default function App() {
                     <CompetitionEndedDashboard
                       leaderboard={leaderboard}
                       currentTeam={team}
-                      writeupMode={Boolean(competitionState.writeupMode)}
+                      writeupMode={Boolean(competitionState.writeupMode || competitionState.status === 'ended')}
                       onReplayRocketLaunch={() => setShowRocketLaunch(true)}
                       onOpenWriteupPortal={() => {
-                        if (!competitionState.writeupMode) return;
                         const available = challenges.filter((c) => Boolean(c.writeup));
                         if (available.length > 0) {
                           setActiveWriteupChallenge(available[0]);
@@ -993,6 +1072,7 @@ export default function App() {
                     onSuccess={handleTeamLoginSuccess}
                     onAdminSuccess={handleAdminLoginSuccess}
                     onExploreScoreboard={() => setCurrentTab('leaderboard')}
+                    isCompetitionEnded={false}
                   />
                 ) : (competitionState.status !== 'running' && !adminToken) || !isReadyToStart ? (
                   /* Pre-Competition Gate: Explicit Opt-In Before Challenges Render & Holds Teams Until Admin Starts */
@@ -1110,6 +1190,19 @@ export default function App() {
                   onNavigateToChallenges={() => setCurrentTab('challenges')}
                   onNavigateToLeaderboard={() => setCurrentTab('leaderboard')}
                 />
+              ) : !team && !adminToken ? (
+                <GuestRestrictedTabCard
+                  title="FEEDBACK EVALUATION: PARTICIPANT SQUAD LOGIN REQUIRED"
+                  description="Tournament feedback evaluations are reserved for participating squads that competed. Please log into your squad account to submit feedback, or explore the final leaderboard and official challenge solutions."
+                  authButtonText="PARTICIPANT SQUAD LOG IN"
+                  rulesButtonText="CHALLENGES & SOLUTIONS"
+                  onOpenAuthModal={() => setIsAuthModalOpen(true)}
+                  onNavigateToRules={() => {
+                    setGuestViewingArchive(true);
+                    setCurrentTab('challenges');
+                  }}
+                  onNavigateToLeaderboard={() => setCurrentTab('leaderboard')}
+                />
               ) : (
                 <FeedbackSection
                   team={team}
@@ -1125,9 +1218,18 @@ export default function App() {
               !team && !adminToken ? (
                 <GuestRestrictedTabCard
                   title="SQUAD PROFILE: SQUAD LOGIN REQUIRED"
-                  description="Please sign in or register your competing team to access your squad stats, decrypted flags, and token settings."
+                  description="Please sign in to access your squad stats, decrypted flags, and token settings."
+                  authButtonText={competitionState.status === 'ended' ? 'PARTICIPANT SQUAD LOG IN' : 'SIGN UP / LOG IN SQUAD'}
+                  rulesButtonText={competitionState.status === 'ended' ? 'CHALLENGES & SOLUTIONS' : 'RULES & INFO'}
                   onOpenAuthModal={() => setIsAuthModalOpen(true)}
-                  onNavigateToRules={() => setCurrentTab('rules')}
+                  onNavigateToRules={() => {
+                    if (competitionState.status === 'ended') {
+                      setGuestViewingArchive(true);
+                      setCurrentTab('challenges');
+                    } else {
+                      setCurrentTab('rules');
+                    }
+                  }}
                   onNavigateToLeaderboard={() => setCurrentTab('leaderboard')}
                 />
               ) : (
@@ -1193,6 +1295,7 @@ export default function App() {
         onClose={() => setIsAuthModalOpen(false)}
         onSuccess={handleTeamLoginSuccess}
         onAdminSuccess={handleAdminLoginSuccess}
+        isCompetitionEnded={competitionState.status === 'ended'}
       />
 
       <AdminLoginModal
@@ -1213,9 +1316,9 @@ export default function App() {
         onDismiss={handleDismissAnnouncement}
       />
 
-      {Boolean(competitionState.writeupMode && activeWriteupChallenge) && (
+      {Boolean((competitionState.writeupMode || competitionState.status === 'ended') && activeWriteupChallenge) && (
         <WriteupModal
-          isOpen={Boolean(competitionState.writeupMode && activeWriteupChallenge)}
+          isOpen={Boolean((competitionState.writeupMode || competitionState.status === 'ended') && activeWriteupChallenge)}
           challenge={activeWriteupChallenge}
           challenges={challenges.filter((c) => Boolean(c.writeup))}
           onSelectChallenge={(c) => setActiveWriteupChallenge(c)}
