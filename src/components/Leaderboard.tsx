@@ -73,9 +73,16 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
   };
 
   const getRankBadge = (rank: number, score: number = 0) => {
+    if (score < 0) {
+      return (
+        <span className="font-mono text-xs font-bold text-rose-400 w-8 text-center" title={`Rank #${rank} (Negative score: ${score} pts)`}>
+          #{rank}
+        </span>
+      );
+    }
     if (score === 0) {
       return (
-        <span className="font-mono text-xs font-semibold text-slate-500 w-8 text-center" title="Not participated yet (0 points)">
+        <span className="font-mono text-xs font-semibold text-slate-400 w-8 text-center" title={`Rank #${rank} (0 points)`}>
           #{rank}
         </span>
       );

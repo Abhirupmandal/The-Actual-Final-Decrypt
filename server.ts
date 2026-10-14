@@ -346,14 +346,7 @@ function getSortedLeaderboard(): LeaderboardEntry[] {
       return a.isDisqualified ? 1 : -1;
     }
 
-    // 2. Point scoring teams (score > 0) ALWAYS come before teams who have 0 points (did not participate yet)
-    const aHasPoints = a.score > 0;
-    const bHasPoints = b.score > 0;
-    if (aHasPoints !== bHasPoints) {
-      return aHasPoints ? -1 : 1;
-    }
-
-    // 3. For point-scoring teams: strictly highest points first (most points takes 1st place)
+    // 2. Pure unbiased score sorting: highest points first across all teams (positive, zero, or negative)
     if (b.score !== a.score) {
       return b.score - a.score;
     }
