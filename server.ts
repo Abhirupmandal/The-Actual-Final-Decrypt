@@ -351,13 +351,13 @@ function getSortedLeaderboard(): LeaderboardEntry[] {
     return cachedLeaderboard;
   }
 
-  // Ensure all teams from persistent store (including Supabase) are present in memory map
+  // Ensure memory map matches persistent store (including after resets)
   const teamList = teamStore.getAll();
+  teams.clear();
+  teamNameLowerIndex.clear();
   teamList.forEach((t) => {
-    if (!teams.has(t.id)) {
-      teams.set(t.id, t);
-      teamNameLowerIndex.set(t.teamName.toLowerCase().trim(), t.id);
-    }
+    teams.set(t.id, t);
+    teamNameLowerIndex.set(t.teamName.toLowerCase().trim(), t.id);
   });
 
   teamList.sort((a, b) => {
@@ -2737,7 +2737,22 @@ app.get('/api/admin/leaderboard/snapshots', requireAdminAuth, (_req: Request, re
 app.post('/api/admin/reset', requireAdminAuth, async (req: Request, res: Response) => {
   // 1. Wipe all teams from memory, SQLite database, and disk backup
   teams.clear();
+  teamNameLowerIndex.clear();
+  cachedLeaderboard = null;
+  lastLeaderboardCalc = 0;
   teamStore.clearAll();
+
+  // Clear baseline seed teams so test names do not resurrect on reboot
+  try {
+    const seedPath = path.join(process.cwd(), 'data', 'baseline_seed.json');
+    if (fs.existsSync(seedPath)) {
+      const seed = JSON.parse(fs.readFileSync(seedPath, 'utf-8'));
+      seed.teams = [];
+      fs.writeFileSync(seedPath, JSON.stringify(seed, null, 2), 'utf-8');
+    }
+  } catch (err) {
+    console.error('[Reset] Error clearing seed teams:', err);
+  }
 
   // Also wipe remote Supabase PostgreSQL tables so testing teams do not persist or resurrect
   if (postgresSync.isEnabled()) {

@@ -675,7 +675,13 @@ class PostgresSyncManager {
     if (!this.pool || !this.isConnected) return;
     try {
       await this.pool.query(`
-        TRUNCATE TABLE teams, submissions, activity_feed, screenshot_alerts, security_logs, audit_logs, user_feedbacks CASCADE;
+        DELETE FROM submissions;
+        DELETE FROM activity_feed;
+        DELETE FROM screenshot_alerts;
+        DELETE FROM security_logs;
+        DELETE FROM audit_logs;
+        DELETE FROM user_feedbacks;
+        DELETE FROM teams;
       `);
       console.log('[PostgreSQL] Successfully wiped all runtime tables in Supabase.');
     } catch (err) {
