@@ -696,6 +696,109 @@ class PostgresSyncManager {
       return null;
     }
   }
+
+  public async loadAuditLogs(limit = 2000): Promise<AuditLog[]> {
+    if (!this.pool || !this.isConnected) return [];
+    try {
+      const res = await this.pool.query(
+        'SELECT * FROM audit_logs ORDER BY COALESCE(timestamp_ms, timestamp) DESC LIMIT $1',
+        [limit]
+      );
+      return res.rows.map((r) => {
+        if (r.log_data) {
+          try {
+            return JSON.parse(r.log_data);
+          } catch {}
+        }
+        return {
+          logId: String(r.id),
+          actorType: String(r.actor_type || 'SYSTEM') as any,
+          actorIdentifier: String(r.actor_identifier || 'SYSTEM'),
+          actionType: String(r.action_type || 'SYSTEM_INFO') as any,
+          details: String(r.details || '{}'),
+          ipAddress: String(r.ip_address || '127.0.0.1'),
+          timestamp: new Date(Number(r.timestamp_ms || r.timestamp || Date.now())).toISOString(),
+          timestampMs: Number(r.timestamp_ms || r.timestamp || Date.now()),
+        };
+      });
+    } catch (err) {
+      console.error('[PostgreSQL] Error loading audit logs:', err);
+      return [];
+    }
+  }
+
+  public async loadActivityFeed(limit = 300): Promise<ActivityFeedEvent[]> {
+    if (!this.pool || !this.isConnected) return [];
+    try {
+      const res = await this.pool.query('SELECT * FROM activity_feed ORDER BY timestamp DESC LIMIT $1', [limit]);
+      return res.rows.map((r) => {
+        if (r.event_data) {
+          try {
+            return JSON.parse(r.event_data);
+          } catch {}
+        }
+        return {
+          id: String(r.id),
+          timestamp: Number(r.timestamp),
+          type: 'FLAG_SOLVE' as any,
+          teamName: 'Team',
+          message: 'CTF Event',
+        };
+      });
+    } catch (err) {
+      console.error('[PostgreSQL] Error loading activity feed:', err);
+      return [];
+    }
+  }
+
+  public async loadSecurityLogs(limit = 300): Promise<SecurityLog[]> {
+    if (!this.pool || !this.isConnected) return [];
+    try {
+      const res = await this.pool.query('SELECT * FROM security_logs ORDER BY timestamp DESC LIMIT $1', [limit]);
+      return res.rows.map((r) => {
+        if (r.log_data) {
+          try {
+            return JSON.parse(r.log_data);
+          } catch {}
+        }
+        return {
+          id: String(r.id),
+          timestamp: Number(r.timestamp),
+          teamName: r.team_name ? String(r.team_name) : undefined,
+          ip: String(r.ip || '127.0.0.1'),
+          type: (r.type || 'SYSTEM_INFO') as any,
+          details: String(r.details || ''),
+          severity: (r.severity || 'low') as any,
+        };
+      });
+    } catch (err) {
+      console.error('[PostgreSQL] Error loading security logs:', err);
+      return [];
+    }
+  }
+
+  public async loadSubmissions(): Promise<SubmissionRecord[]> {
+    if (!this.pool || !this.isConnected) return [];
+    try {
+      const res = await this.pool.query('SELECT * FROM submissions ORDER BY submitted_at ASC');
+      return res.rows.map((row) => ({
+        id: String(row.id),
+        teamId: String(row.team_id),
+        teamName: '',
+        challengeId: String(row.challenge_id),
+        challengeTitle: '',
+        submittedFlag: String(row.submitted_flag),
+        isCorrect: Boolean(row.is_correct),
+        pointsAwarded: 0,
+        timestamp: Number(row.submitted_at),
+        ip: String(row.ip),
+      }));
+    } catch (err) {
+      console.error('[PostgreSQL] Error loading submissions:', err);
+      return [];
+    }
+  }
 }
 
 export const postgresSync = new PostgresSyncManager();
+

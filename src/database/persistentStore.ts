@@ -905,6 +905,28 @@ class SqliteSecurityLogStore {
     return log;
   }
 
+  public upsertFromPostgres(log: SecurityLog): void {
+    try {
+      const stmt = this.db.prepare(`
+        INSERT OR REPLACE INTO security_logs (
+          id, timestamp, team_name, ip, type, details, severity
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+      stmt.run([
+        log.id,
+        log.timestamp,
+        log.teamName || null,
+        log.ip,
+        log.type,
+        log.details,
+        log.severity,
+      ]);
+      stmt.free();
+    } catch (err) {
+      console.error('[SQLite SecurityLogStore] Error upserting security log from PostgreSQL:', err);
+    }
+  }
+
   public getAll(limit = 300): SecurityLog[] {
     try {
       const stmt = this.db.prepare(`
@@ -984,6 +1006,28 @@ class SqliteActivityFeedStore {
     }
 
     return event;
+  }
+
+  public upsertFromPostgres(event: ActivityFeedEvent): void {
+    try {
+      const stmt = this.db.prepare(`
+        INSERT OR REPLACE INTO activity_feed (
+          id, timestamp, type, team_name, challenge_title, points, message
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+      stmt.run([
+        event.id,
+        event.timestamp,
+        event.type,
+        event.teamName,
+        event.challengeTitle || null,
+        event.points !== undefined ? event.points : null,
+        event.message,
+      ]);
+      stmt.free();
+    } catch (err) {
+      console.error('[SQLite ActivityFeedStore] Error upserting activity event from PostgreSQL:', err);
+    }
   }
 
   public getRecent(limit = 50): ActivityFeedEvent[] {
@@ -1138,6 +1182,31 @@ class SqliteSubmissionStore {
     }
 
     return sub;
+  }
+
+  public upsertFromPostgres(sub: SubmissionRecord): void {
+    try {
+      const stmt = this.db.prepare(`
+        INSERT OR REPLACE INTO submissions (
+          id, team_id, team_name, challenge_id, challenge_title, submitted_flag, is_correct, points_awarded, timestamp, ip
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      stmt.run([
+        sub.id,
+        sub.teamId,
+        sub.teamName || '',
+        sub.challengeId,
+        sub.challengeTitle || null,
+        sub.submittedFlag,
+        sub.isCorrect ? 1 : 0,
+        sub.pointsAwarded || 0,
+        sub.timestamp,
+        sub.ip,
+      ]);
+      stmt.free();
+    } catch (err) {
+      console.error('[SQLite SubmissionStore] Error upserting submission from PostgreSQL:', err);
+    }
   }
 
   public getRecent(limit = 200): SubmissionRecord[] {
@@ -1497,6 +1566,29 @@ class SqliteAuditLogStore {
     return fullLog;
   }
 
+  public upsertFromPostgres(log: AuditLog): void {
+    try {
+      const stmt = this.db.prepare(`
+        INSERT OR REPLACE INTO audit_logs (
+          log_id, actor_type, actor_identifier, action_type, details, ip_address, timestamp, timestamp_ms
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+      `);
+      stmt.run([
+        String(log.logId || ('audit-' + crypto.randomUUID())),
+        String(log.actorType || 'SYSTEM'),
+        String(log.actorIdentifier || 'SYSTEM'),
+        String(log.actionType || 'SYSTEM_INFO'),
+        typeof log.details === 'string' ? log.details : JSON.stringify(log.details || {}),
+        String(log.ipAddress || '127.0.0.1'),
+        String(log.timestamp || new Date().toISOString()),
+        Number(log.timestampMs || Date.now()),
+      ]);
+      stmt.free();
+    } catch (err) {
+      console.error('[SQLite AuditLogStore] Error upserting audit log from PostgreSQL:', err);
+    }
+  }
+
   public getAll(limit = 2000): AuditLog[] {
     try {
       const stmt = this.db.prepare(`
@@ -1800,6 +1892,40 @@ if (postgresSync.isEnabled()) {
           console.log('[PostgreSQL] Loaded competition configuration from remote cloud PostgreSQL.');
           competitionStateStore.saveState(pgConfig);
         }
+
+        const pgAuditLogs = await postgresSync.loadAuditLogs();
+        if (pgAuditLogs.length > 0) {
+          console.log(`[PostgreSQL] Loaded ${pgAuditLogs.length} audit logs from remote cloud PostgreSQL.`);
+          for (const al of pgAuditLogs) {
+            auditLogStore.upsertFromPostgres(al);
+          }
+        }
+
+        const pgActivity = await postgresSync.loadActivityFeed();
+        if (pgActivity.length > 0) {
+          console.log(`[PostgreSQL] Loaded ${pgActivity.length} activity feed events from remote cloud PostgreSQL.`);
+          for (const ev of pgActivity) {
+            activityFeedStore.upsertFromPostgres(ev);
+          }
+        }
+
+        const pgSecLogs = await postgresSync.loadSecurityLogs();
+        if (pgSecLogs.length > 0) {
+          console.log(`[PostgreSQL] Loaded ${pgSecLogs.length} security logs from remote cloud PostgreSQL.`);
+          for (const sl of pgSecLogs) {
+            securityLogStore.upsertFromPostgres(sl);
+          }
+        }
+
+        const pgSubmissions = await postgresSync.loadSubmissions();
+        if (pgSubmissions.length > 0) {
+          console.log(`[PostgreSQL] Loaded ${pgSubmissions.length} submissions from remote cloud PostgreSQL.`);
+          for (const sub of pgSubmissions) {
+            submissionStore.upsertFromPostgres(sub);
+          }
+        }
+
+        teamStore.flushToDisk();
 
         if (onRemoteSyncHook) {
           onRemoteSyncHook(teamStore.getAll(), pgConfig);

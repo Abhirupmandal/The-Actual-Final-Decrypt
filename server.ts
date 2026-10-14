@@ -199,6 +199,8 @@ const competitionState: CompetitionState = competitionStateStore.getState(defaul
 // Ensure tournament timer is preserved; register remote sync hook to update live from Supabase
 setRemoteSyncHook((syncedTeams, pgConfig) => {
   loadPersistedTeams();
+  activityFeed = activityFeedStore.getRecent(250);
+  securityLogs = securityLogStore.getAll(300);
   if (pgConfig) {
     if (pgConfig.status) competitionState.status = pgConfig.status;
     if (typeof pgConfig.remainingSeconds === 'number') competitionState.remainingSeconds = pgConfig.remainingSeconds;
@@ -208,7 +210,7 @@ setRemoteSyncHook((syncedTeams, pgConfig) => {
   }
   broadcastLeaderboard();
   broadcastState();
-  console.log(`[PostgreSQL Realtime Sync] Synchronized ${teams.size} teams and state (${competitionState.status}) from Supabase.`);
+  console.log(`[PostgreSQL Realtime Sync] Synchronized ${teams.size} teams, ${activityFeed.length} activities, ${auditLogStore.count()} audit logs, and state (${competitionState.status}) from Supabase.`);
 });
 
 // --- Helper Functions ---
