@@ -1,7 +1,8 @@
 # ⚡ The Final Decrypt (CTF Arena)
 
 > **Developed with ❤️ by IEEE NMIET RAS Developer Team**  
-> **Core Developers: Shrikant & Anuj**
+> **Core Developer: Abhirup**  
+> **Secondary Devs: Shrikant & Anuj**
 
 An advanced, interactive Capture The Flag (CTF) tournament platform engineered for real-time cybersecurity competitions, live scoreboard analytics, anti-cheat detection, and post-event debriefs.
 

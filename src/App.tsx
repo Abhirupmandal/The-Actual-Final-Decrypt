@@ -1122,10 +1122,14 @@ export default function App() {
             <span>·</span>
             <span>ROUND 2: NO CLUE, NO MERCY</span>
             <span className="hidden sm:inline">·</span>
-            <span className="text-cyan-400 font-medium inline-flex items-center gap-1.5">
-              <span>Developed with</span>
-              <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500 animate-pulse" />
-              <span>by IEEE NMIET RAS Developer Team</span>
+            <span className="text-cyan-400 font-medium inline-flex items-center gap-1.5 flex-wrap">
+              <span>Core Developer:</span>
+              <span className="text-white font-bold bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-500/40 text-cyan-200">Abhirup</span>
+              <span className="text-slate-600 hidden sm:inline">|</span>
+              <span>Secondary Devs:</span>
+              <span className="text-slate-300 font-semibold bg-slate-900 px-2 py-0.5 rounded border border-slate-700">Shrikant</span>
+              <span>&amp;</span>
+              <span className="text-slate-300 font-semibold bg-slate-900 px-2 py-0.5 rounded border border-slate-700">Anuj</span>
             </span>
           </div>
 
