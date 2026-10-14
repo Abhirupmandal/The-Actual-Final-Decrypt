@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Trophy,
   Medal,
@@ -15,6 +15,10 @@ import {
   Layers,
   Crown,
   Zap,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 import type { LeaderboardEntry } from '../types.ts';
 import { playCyberBlip, playSuccessChime } from '../utils/audio.ts';
@@ -28,6 +32,21 @@ interface LeaderboardProps {
   onOpenAuthModal?: () => void;
 }
 
+function getPageNumbers(current: number, total: number): (number | string)[] {
+  if (total <= 5) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  const pages: (number | string)[] = [];
+  if (current <= 3) {
+    pages.push(1, 2, 3, 4, '...', total);
+  } else if (current >= total - 2) {
+    pages.push(1, '...', total - 3, total - 2, total - 1, total);
+  } else {
+    pages.push(1, '...', current - 1, current, current + 1, '...', total);
+  }
+  return pages;
+}
+
 export const Leaderboard: React.FC<LeaderboardProps> = ({
   entries,
   currentTeamId,
@@ -39,11 +58,26 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
   const [search, setSearch] = useState('');
   const [showTieBreakerExplainer, setShowTieBreakerExplainer] = useState(false);
   const [isUpdatingMode, setIsUpdatingMode] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 25;
 
   const filtered = entries.filter((e) =>
     e.teamName.toLowerCase().includes(search.toLowerCase()) ||
     e.members.some((m) => m.toLowerCase().includes(search.toLowerCase()))
   );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIndex = (safeCurrentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, filtered.length);
+  const paginatedEntries = filtered.slice(startIndex, endIndex);
+
+  const myTeamIndex = entries.findIndex((e) => e.teamId === currentTeamId);
+  const myTeamPage = myTeamIndex !== -1 ? Math.floor(myTeamIndex / pageSize) + 1 : null;
 
   const formatLastSolve = (ts: number) => {
     if (!ts || ts === 0) return '—';
@@ -228,7 +262,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
         {/* Mobile Swipe Guidance Banner */}
         <div className="sm:hidden px-4 py-1.5 bg-slate-900/80 border-b border-slate-800 text-[10px] text-slate-400 font-mono flex items-center justify-between">
           <span className="text-[#00ff66]">← SWIPE TABLE TO VIEW COLUMNS →</span>
-          <span>{filtered.length} TEAMS</span>
+          <span>PAGE {safeCurrentPage} OF {totalPages} ({filtered.length} TEAMS)</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs font-mono min-w-[680px]">
@@ -243,7 +277,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/60">
-              {filtered.map((entry) => {
+              {paginatedEntries.map((entry) => {
                 const isCurrentTeam = currentTeamId === entry.teamId;
 
                 return (
@@ -394,6 +428,118 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
             </tbody>
           </table>
         </div>
+
+        {/* Dynamic Pagination Footer (25 Teams Per Page) */}
+        {filtered.length > pageSize && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t border-slate-800 bg-[#080d16] text-xs font-mono">
+            <div className="text-slate-400 text-center sm:text-left flex items-center gap-2 flex-wrap justify-center sm:justify-start">
+              <span>
+                Showing <strong className="text-white">{startIndex + 1}</strong>–<strong className="text-white">{endIndex}</strong> of <strong className="text-[#00ff66]">{filtered.length}</strong> teams
+              </span>
+              <span className="text-slate-600">|</span>
+              <span className="text-slate-400">
+                Page <strong className="text-white">{safeCurrentPage}</strong> of <strong className="text-white">{totalPages}</strong>
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5 flex-wrap justify-center">
+              {/* Quick jump to My Team if on another page */}
+              {myTeamPage && myTeamPage !== safeCurrentPage && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    playCyberBlip(750);
+                    setCurrentPage(myTeamPage);
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg bg-[#00ff66]/10 hover:bg-[#00ff66]/20 text-[#00ff66] border border-[#00ff66]/40 font-bold transition-all text-xs flex items-center gap-1 cursor-pointer mr-1"
+                  title={`Jump to page ${myTeamPage} where your squad is ranked`}
+                >
+                  <Crown className="w-3 h-3 text-[#00ff66]" />
+                  <span>YOUR TEAM (PAGE {myTeamPage})</span>
+                </button>
+              )}
+
+              {/* First Page button */}
+              <button
+                type="button"
+                onClick={() => {
+                  playCyberBlip(700);
+                  setCurrentPage(1);
+                }}
+                disabled={safeCurrentPage === 1}
+                className="p-1.5 rounded-lg bg-slate-800/90 text-slate-300 hover:text-white hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all border border-slate-700/60"
+                title="First Page (Top 25 Teams)"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+              </button>
+
+              {/* Previous Page button */}
+              <button
+                type="button"
+                onClick={() => {
+                  playCyberBlip(700);
+                  setCurrentPage((p) => Math.max(1, p - 1));
+                }}
+                disabled={safeCurrentPage === 1}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-800/90 text-slate-300 hover:text-white hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all border border-slate-700/60 flex items-center gap-1 font-bold"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span>PREV</span>
+              </button>
+
+              {/* Numeric Page Buttons */}
+              {getPageNumbers(safeCurrentPage, totalPages).map((p, idx) => (
+                typeof p === 'number' ? (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      playCyberBlip(700);
+                      setCurrentPage(p);
+                    }}
+                    className={`min-w-[32px] h-8 px-2 rounded-lg font-bold transition-all text-xs flex items-center justify-center cursor-pointer ${
+                      safeCurrentPage === p
+                        ? 'bg-[#00ff66] text-black shadow-[0_0_15px_rgba(0,255,102,0.4)] scale-105'
+                        : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700 hover:text-white border border-slate-700/60'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ) : (
+                  <span key={idx} className="px-1 text-slate-500 font-bold">…</span>
+                )
+              ))}
+
+              {/* Next Page button */}
+              <button
+                type="button"
+                onClick={() => {
+                  playCyberBlip(700);
+                  setCurrentPage((p) => Math.min(totalPages, p + 1));
+                }}
+                disabled={safeCurrentPage === totalPages}
+                className="px-2.5 py-1.5 rounded-lg bg-slate-800/90 text-slate-300 hover:text-white hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all border border-slate-700/60 flex items-center gap-1 font-bold"
+              >
+                <span>NEXT</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+
+              {/* Last Page button */}
+              <button
+                type="button"
+                onClick={() => {
+                  playCyberBlip(700);
+                  setCurrentPage(totalPages);
+                }}
+                disabled={safeCurrentPage === totalPages}
+                className="p-1.5 rounded-lg bg-slate-800/90 text-slate-300 hover:text-white hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all border border-slate-700/60"
+                title={`Last Page (Page ${totalPages})`}
+              >
+                <ChevronsRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
