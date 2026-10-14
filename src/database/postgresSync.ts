@@ -693,6 +693,17 @@ class PostgresSyncManager {
     }
   }
 
+  public async clearFeedback(): Promise<void> {
+    if (!this.pool) return;
+    try {
+      await this.pool.query('DELETE FROM user_feedbacks');
+      await this.pool.query('DELETE FROM feedback').catch(() => {});
+      console.log('[PostgreSQL] Cleared user_feedbacks in Supabase.');
+    } catch (err) {
+      console.error('[PostgreSQL] Error clearing feedback in Supabase:', err);
+    }
+  }
+
   public async wipeAll(): Promise<void> {
     if (!this.pool) return;
     const tables = [

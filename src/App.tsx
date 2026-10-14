@@ -169,7 +169,15 @@ export default function App() {
   // Mandatory Post-Event Feedback Submission Gate
   const [hasSubmittedFeedback, setHasSubmittedFeedback] = useState<boolean>(() => {
     try {
-      return localStorage.getItem('ctf_feedback_submitted') === 'true';
+      localStorage.removeItem('ctf_feedback_submitted');
+      const teamData = localStorage.getItem('ctf_team_data');
+      if (teamData) {
+        const parsed = JSON.parse(teamData);
+        if (parsed?.id && localStorage.getItem('ctf_feedback_submitted_' + parsed.id) === 'true') {
+          return true;
+        }
+      }
+      return false;
     } catch {
       return false;
     }
@@ -407,12 +415,23 @@ export default function App() {
             .then((d) => {
               if (d?.feedback) {
                 setHasSubmittedFeedback(true);
-                try {
-                  localStorage.setItem('ctf_feedback_submitted', 'true');
-                } catch {}
+                if (data.team?.id) {
+                  try {
+                    localStorage.setItem('ctf_feedback_submitted_' + data.team.id, 'true');
+                  } catch {}
+                }
+              } else {
+                setHasSubmittedFeedback(false);
+                if (data.team?.id) {
+                  try {
+                    localStorage.removeItem('ctf_feedback_submitted_' + data.team.id);
+                  } catch {}
+                }
               }
             })
             .catch(() => {});
+        } else {
+          setHasSubmittedFeedback(false);
         }
       }
     } catch (err) {
@@ -422,15 +441,23 @@ export default function App() {
 
   const handleFeedbackSubmittedSuccess = useCallback(() => {
     setHasSubmittedFeedback(true);
+    const teamData = localStorage.getItem('ctf_team_data');
     try {
-      localStorage.setItem('ctf_feedback_submitted', 'true');
+      const parsed = teamData ? JSON.parse(teamData) : null;
+      if (parsed?.id) {
+        localStorage.setItem('ctf_feedback_submitted_' + parsed.id, 'true');
+      }
     } catch {}
   }, []);
 
   const handleUnlockAndShowDashboard = useCallback(() => {
     setHasSubmittedFeedback(true);
+    const teamData = localStorage.getItem('ctf_team_data');
     try {
-      localStorage.setItem('ctf_feedback_submitted', 'true');
+      const parsed = teamData ? JSON.parse(teamData) : null;
+      if (parsed?.id) {
+        localStorage.setItem('ctf_feedback_submitted_' + parsed.id, 'true');
+      }
     } catch {}
     setCurrentTab('leaderboard');
     const token = localStorage.getItem('ctf_team_token');
@@ -632,10 +659,12 @@ export default function App() {
 
     s.on('competition_reset', () => {
       localStorage.removeItem('ctf_team_token');
+      localStorage.removeItem('ctf_team_data');
+      localStorage.removeItem('ctf_feedback_submitted');
       try {
         const allKeys = Object.keys(localStorage);
         allKeys.forEach((k) => {
-          if (k.startsWith('ctf_team_ready_')) {
+          if (k.startsWith('ctf_team_ready_') || k.startsWith('ctf_feedback_submitted')) {
             localStorage.removeItem(k);
           }
         });
@@ -643,7 +672,21 @@ export default function App() {
       setTeam(null);
       setIsReadyToStart(false);
       setIsDisqualified(false);
+      setHasSubmittedFeedback(false);
       setFocusBannerWarning(null);
+      fetchState();
+    });
+
+    s.on('feedbacks_cleared', () => {
+      setHasSubmittedFeedback(false);
+      try {
+        const allKeys = Object.keys(localStorage);
+        allKeys.forEach((k) => {
+          if (k.startsWith('ctf_feedback_submitted')) {
+            localStorage.removeItem(k);
+          }
+        });
+      } catch {}
       fetchState();
     });
 
@@ -677,6 +720,7 @@ export default function App() {
       } catch {}
     }
     setTeam(newTeam);
+    setHasSubmittedFeedback(newTeam?.id ? localStorage.getItem('ctf_feedback_submitted_' + newTeam.id) === 'true' : false);
     if (newTeam.hasStarted) {
       setIsReadyToStart(true);
     } else {
@@ -706,11 +750,14 @@ export default function App() {
   const handleTeamLogout = () => {
     if (team) {
       localStorage.removeItem('ctf_team_ready_' + team.id);
+      localStorage.removeItem('ctf_feedback_submitted_' + team.id);
     }
     localStorage.removeItem('ctf_team_token');
     localStorage.removeItem('ctf_team_data');
+    localStorage.removeItem('ctf_feedback_submitted');
     setTeam(null);
     setIsReadyToStart(false);
+    setHasSubmittedFeedback(false);
     setFocusBannerWarning(null);
     fetchState();
   };

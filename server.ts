@@ -2316,17 +2316,25 @@ app.delete('/api/admin/feedbacks/:id', requireAdminAuth, (req: Request, res: Res
 });
 
 // Admin clear all feedbacks
-app.post('/api/admin/feedbacks/clear', requireAdminAuth, (req: Request, res: Response) => {
+app.post('/api/admin/feedbacks/clear', requireAdminAuth, async (req: Request, res: Response) => {
   feedbackStore.clearAll();
+  if (postgresSync.isEnabled()) {
+    await postgresSync.clearFeedback();
+  }
   const ip = getClientIp(req);
   recordAuditLog('ADMIN', 'Admin', 'ALL_FEEDBACK_CLEARED', {}, ip);
+  io.emit('feedbacks_cleared');
   res.json({ success: true, message: 'All feedback submissions successfully purged.' });
 });
 
-app.delete('/api/admin/feedbacks', requireAdminAuth, (req: Request, res: Response) => {
+app.delete('/api/admin/feedbacks', requireAdminAuth, async (req: Request, res: Response) => {
   feedbackStore.clearAll();
+  if (postgresSync.isEnabled()) {
+    await postgresSync.clearFeedback();
+  }
   const ip = getClientIp(req);
   recordAuditLog('ADMIN', 'Admin', 'ALL_FEEDBACK_CLEARED', {}, ip);
+  io.emit('feedbacks_cleared');
   res.json({ success: true, message: 'All feedback submissions successfully purged.' });
 });
 

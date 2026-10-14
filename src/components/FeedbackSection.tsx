@@ -48,7 +48,7 @@ export const FeedbackSection: React.FC<FeedbackSectionProps> = ({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [isSubmitted, setIsSubmitted] = useState<boolean>(() => {
     try {
-      if (localStorage.getItem('ctf_feedback_submitted') === 'true') return true;
+      localStorage.removeItem('ctf_feedback_submitted');
       if (team?.id && localStorage.getItem('ctf_feedback_submitted_' + team.id) === 'true') return true;
       return false;
     } catch {
@@ -79,15 +79,22 @@ export const FeedbackSection: React.FC<FeedbackSectionProps> = ({
   // Sync existing feedback on load
   useEffect(() => {
     const fetchExisting = async () => {
+      try {
+        localStorage.removeItem('ctf_feedback_submitted');
+      } catch {}
+
       const token = localStorage.getItem('ctf_team_token');
-      if (!token) return;
+      if (!token) {
+        setIsSubmitted(false);
+        return;
+      }
       try {
         const res = await fetch('/api/feedback/my', {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.ok) {
           const data = await res.json();
-          if (data.feedback) {
+          if (data?.feedback) {
             const fb: FeedbackSubmission = data.feedback;
             setRatingUi(fb.ratingUi);
             setChallengeDifficulty(fb.challengeDifficulty);
@@ -98,12 +105,18 @@ export const FeedbackSection: React.FC<FeedbackSectionProps> = ({
             setSuggestionsRound3(fb.suggestionsRound3);
             setSubmittedTeamName(fb.teamName);
             setIsSubmitted(true);
-            try {
-              localStorage.setItem('ctf_feedback_submitted', 'true');
-              if (team?.id) {
+            if (team?.id) {
+              try {
                 localStorage.setItem('ctf_feedback_submitted_' + team.id, 'true');
-              }
-            } catch {}
+              } catch {}
+            }
+          } else {
+            setIsSubmitted(false);
+            if (team?.id) {
+              try {
+                localStorage.removeItem('ctf_feedback_submitted_' + team.id);
+              } catch {}
+            }
           }
         }
       } catch {}
@@ -176,12 +189,11 @@ export const FeedbackSection: React.FC<FeedbackSectionProps> = ({
       if (res.ok && data.success) {
         setSubmittedTeamName(activeTeamName);
         setIsSubmitted(true);
-        try {
-          localStorage.setItem('ctf_feedback_submitted', 'true');
-          if (team?.id) {
+        if (team?.id) {
+          try {
             localStorage.setItem('ctf_feedback_submitted_' + team.id, 'true');
-          }
-        } catch {}
+          } catch {}
+        }
         triggerCelebration();
         onFeedbackSubmitted?.();
 
@@ -190,12 +202,11 @@ export const FeedbackSection: React.FC<FeedbackSectionProps> = ({
       } else if (res.status === 409 || data?.alreadySubmitted) {
         setSubmittedTeamName(activeTeamName);
         setIsSubmitted(true);
-        try {
-          localStorage.setItem('ctf_feedback_submitted', 'true');
-          if (team?.id) {
+        if (team?.id) {
+          try {
             localStorage.setItem('ctf_feedback_submitted_' + team.id, 'true');
-          }
-        } catch {}
+          } catch {}
+        }
         setError(data.error || 'Your squad has already submitted feedback. The feedback form can only be given once.');
         onFeedbackSubmitted?.();
         setRedirectCountdown(3);
