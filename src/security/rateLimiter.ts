@@ -22,10 +22,10 @@ export const RATE_LIMIT_CONFIGS = {
   FLAG_SUBMISSION: { max: 5, windowMs: 10000, lockoutMs: 10000 },
   // Admin Login: Max 5 attempts per 60 seconds per IP (protects master passkey)
   ADMIN_LOGIN: { max: 5, windowMs: 60000, lockoutMs: 300000 },
-  // Team Auth: Max 15 attempts per 60 seconds per IP
-  TEAM_AUTH: { max: 15, windowMs: 60000, lockoutMs: 60000 },
-  // Global API: Max 1200 requests per minute per IP (protects shared campus NAT/Wi-Fi with 100+ concurrent users)
-  GLOBAL_API: { max: 1200, windowMs: 60000, lockoutMs: 30000 },
+  // Team Auth: Max 1000 attempts per 60 seconds per IP (supports 300+ to 1000+ teams logging in simultaneously on shared campus Wi-Fi/NAT)
+  TEAM_AUTH: { max: 1000, windowMs: 60000, lockoutMs: 15000 },
+  // Global API: Max 6000 requests per minute per IP (protects shared campus NAT/Wi-Fi with 300+ concurrent active student devices)
+  GLOBAL_API: { max: 6000, windowMs: 60000, lockoutMs: 15000 },
 };
 
 // Periodic Memory Eviction: Purge inactive buckets every 5 minutes to maintain negligible memory footprint
