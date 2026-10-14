@@ -296,29 +296,6 @@ export const Header: React.FC<HeaderProps> = ({
               {renderStrikeIndicator()}
             </div>
 
-            {/* WS Connected Badge (Desktop) */}
-            <div
-              className={`hidden md:flex px-2 py-1 sm:py-1.5 rounded-xl text-[10px] font-mono font-bold border items-center gap-1.5 shrink-0 ${
-                isConnected
-                  ? 'bg-[#040c14]/90 text-[#00ff41] border-[#00ff41]/40 shadow-[0_0_8px_rgba(0,255,65,0.15)]'
-                  : 'bg-red-950/40 text-red-400 border-red-500/40'
-              }`}
-              title={isConnected ? 'Real-Time Telemetry & Socket.IO Active' : 'WebSocket Disconnected'}
-            >
-              <span className="relative flex h-2 w-2 shrink-0">
-                {isConnected ? (
-                  <>
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00ff41] opacity-75 duration-1000" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00ff41] shadow-[0_0_8px_#00ff41]" />
-                  </>
-                ) : (
-                  <span className="inline-flex rounded-full h-2 w-2 bg-red-500 shadow-[0_0_8px_#ef4444]" />
-                )}
-              </span>
-              <span className="hidden 2xl:inline opacity-75">WS:</span>
-              <span className="hidden xl:inline">{isConnected ? 'LIVE' : 'OFF'}</span>
-            </div>
-
             {/* Audio Toggle Button - ALWAYS Visible on sm+ screens */}
             <button
               onClick={toggleSound}
@@ -512,47 +489,24 @@ export const Header: React.FC<HeaderProps> = ({
               )}
             </div>
 
-            {/* System Telemetry & Quick Action Controls in Mobile Drawer */}
-            <div className="pt-3 border-t border-slate-800/80 space-y-3">
+            {/* Quick Action Controls in Mobile Drawer */}
+            <div className="pt-3 border-t border-slate-800/80 space-y-2">
               <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider px-1">
-                SYSTEM & TELEMETRY CONTROLS
+                AUDIO & PREFERENCES
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                {/* Mobile WS Status */}
-                <div
-                  className={`p-2.5 rounded-xl border flex items-center gap-2 ${
-                    isConnected
-                      ? 'bg-[#040c14] text-[#00ff41] border-[#00ff41]/40 shadow-[0_0_10px_rgba(0,255,65,0.15)]'
-                      : 'bg-red-950/40 text-red-400 border-red-500/40'
-                  }`}
-                >
-                  <span className="relative flex h-2 w-2 shrink-0">
-                    {isConnected ? (
-                      <>
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00ff41] opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00ff41]" />
-                      </>
-                    ) : (
-                      <span className="inline-flex rounded-full h-2 w-2 bg-red-500" />
-                    )}
-                  </span>
-                  <span className="text-[11px] font-bold truncate">
-                    {isConnected ? 'WS CONNECTED' : 'OFFLINE'}
-                  </span>
-                </div>
-
+              <div>
                 {/* Mobile Audio SFX Toggle */}
                 <button
                   onClick={toggleSound}
-                  className="min-h-[44px] p-2.5 rounded-xl bg-[#040c14] border border-slate-800 hover:border-[#00ff41]/40 text-slate-300 hover:text-[#00ff41] flex items-center justify-between text-[11px] font-bold cursor-pointer"
+                  className="w-full min-h-[44px] p-2.5 rounded-xl bg-[#040c14] border border-slate-800 hover:border-[#00ff41]/40 text-slate-300 hover:text-[#00ff41] flex items-center justify-between text-[11px] font-bold cursor-pointer"
                 >
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-2">
                     {muted ? <VolumeX className="w-4 h-4 text-slate-500" /> : <Volume2 className="w-4 h-4 text-[#00ff41]" />}
-                    <span>SFX</span>
+                    <span>SOUND EFFECTS (SFX)</span>
                   </div>
                   <span className={muted ? 'text-slate-500' : 'text-[#00ff41]'}>
-                    {muted ? 'MUTED' : 'ON'}
+                    {muted ? 'MUTED' : 'ENABLED'}
                   </span>
                 </button>
               </div>
