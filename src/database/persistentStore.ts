@@ -1801,6 +1801,10 @@ if (postgresSync.isEnabled()) {
           competitionStateStore.saveState(pgConfig);
         }
 
+        if (onRemoteSyncHook) {
+          onRemoteSyncHook(teamStore.getAll(), pgConfig);
+        }
+
         // Synchronize all challenges into Supabase challenges table
         const currentChals = challengeStore.getAll();
         if (currentChals.length > 0) {
@@ -1837,6 +1841,13 @@ if (postgresSync.isEnabled()) {
   });
 }
 
+export type RemoteSyncHook = (teams: Team[], config: CompetitionState | null) => void;
+let onRemoteSyncHook: RemoteSyncHook | null = null;
+export function setRemoteSyncHook(hook: RemoteSyncHook) {
+  onRemoteSyncHook = hook;
+}
+
 export { postgresSync };
+
 
 

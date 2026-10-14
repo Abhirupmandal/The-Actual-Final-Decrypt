@@ -62,6 +62,7 @@ import {
   auditLogStore,
   feedbackStore,
   postgresSync,
+  setRemoteSyncHook,
 } from './src/database/persistentStore.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -195,11 +196,20 @@ const defaultCompetitionState: CompetitionState = {
   announcement: null,
 };
 const competitionState: CompetitionState = competitionStateStore.getState(defaultCompetitionState);
-// Ensure tournament timer is paused on boot until Admin explicitly clicks "START TIMER" in Admin Portal
-if (competitionState.remainingSeconds >= competitionState.durationSeconds && competitionState.status === 'running') {
-  competitionState.status = 'paused';
-  competitionStateStore.saveState(competitionState);
-}
+// Ensure tournament timer is preserved; register remote sync hook to update live from Supabase
+setRemoteSyncHook((syncedTeams, pgConfig) => {
+  loadPersistedTeams();
+  if (pgConfig) {
+    if (pgConfig.status) competitionState.status = pgConfig.status;
+    if (typeof pgConfig.remainingSeconds === 'number') competitionState.remainingSeconds = pgConfig.remainingSeconds;
+    if (typeof pgConfig.durationSeconds === 'number') competitionState.durationSeconds = pgConfig.durationSeconds;
+    if (typeof pgConfig.writeupMode === 'boolean') competitionState.writeupMode = pgConfig.writeupMode;
+    if (pgConfig.announcement !== undefined) competitionState.announcement = pgConfig.announcement;
+  }
+  broadcastLeaderboard();
+  broadcastState();
+  console.log(`[PostgreSQL Realtime Sync] Synchronized ${teams.size} teams and state (${competitionState.status}) from Supabase.`);
+});
 
 // --- Helper Functions ---
 function getClientIp(req: Request): string {
@@ -339,7 +349,14 @@ function getSortedLeaderboard(): LeaderboardEntry[] {
     return cachedLeaderboard;
   }
 
-  const teamList = Array.from(teams.values());
+  // Ensure all teams from persistent store (including Supabase) are present in memory map
+  const teamList = teamStore.getAll();
+  teamList.forEach((t) => {
+    if (!teams.has(t.id)) {
+      teams.set(t.id, t);
+      teamNameLowerIndex.set(t.teamName.toLowerCase().trim(), t.id);
+    }
+  });
 
   teamList.sort((a, b) => {
     // 1. Disqualified teams placed at bottom
