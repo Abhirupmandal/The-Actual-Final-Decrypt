@@ -2127,7 +2127,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   flagFormat: 'CTF{...}',
                   maxAttempts: 5,
                   hints: [
-                    { id: 'h1', title: 'First Clue', cost: 20, content: 'Initial orientation clue.' },
+                    { id: 'h1', title: 'First Clue', cost: 25, content: 'Initial orientation clue.' },
                   ],
                 });
                 setIsEditingChallenge(true);
@@ -3899,7 +3899,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           {
                             id: `hint-${Date.now()}-${nextIdx}`,
                             title: `Hint #${nextIdx}`,
-                            cost: 20,
+                            cost: 25,
                             content: '',
                           },
                         ],
