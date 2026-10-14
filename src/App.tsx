@@ -568,9 +568,13 @@ export default function App() {
     s.on('competition_ended', (data: { top3?: LeaderboardEntry[]; finalStandings?: LeaderboardEntry[] }) => {
       if (data?.finalStandings) setLeaderboard(data.finalStandings);
       if (data?.top3) setTopThreeData(data.top3);
-      setShowVictoryModal(true);
-      fetchState();
       playCompetitionOverSound();
+      fetchState();
+
+      // Launch rocket animation first; onComplete triggers victory top 3 podium
+      setShowVictoryModal(false);
+      setShowRocketLaunch(true);
+      sessionStorage.setItem('ctf_podium_shown', 'true');
     });
 
     s.on('activity_event', (event: ActivityFeedEvent) => {
@@ -645,19 +649,10 @@ export default function App() {
       setActiveAnnouncement(null);
     });
 
-    s.on('competition_ended', (data?: any) => {
-      if (data?.top3) {
-        setTopThreeData(data.top3);
-      }
-      const shown = sessionStorage.getItem('ctf_podium_shown');
-      if (shown !== 'true') {
-        setShowRocketLaunch(true);
-        sessionStorage.setItem('ctf_podium_shown', 'true');
-      }
-      fetchState();
-    });
-
     s.on('competition_reset', () => {
+      sessionStorage.removeItem('ctf_podium_shown');
+      setShowRocketLaunch(false);
+      setShowVictoryModal(false);
       localStorage.removeItem('ctf_team_token');
       localStorage.removeItem('ctf_team_data');
       localStorage.removeItem('ctf_feedback_submitted');

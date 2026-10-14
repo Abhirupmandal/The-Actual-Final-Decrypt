@@ -35,23 +35,23 @@ export const TopThreePodiumModal: React.FC<TopThreePodiumModalProps> = ({
   onViewDashboard,
   onReplayRocketLaunch,
 }) => {
-  const [countdown, setCountdown] = React.useState(5);
+  const [countdown, setCountdown] = React.useState(4);
   const onViewDashboardRef = React.useRef(onViewDashboard);
   onViewDashboardRef.current = onViewDashboard;
   const hasTriggeredRef = React.useRef(false);
 
   useEffect(() => {
     if (!isOpen) {
-      setCountdown(5);
+      setCountdown(4);
       hasTriggeredRef.current = false;
       return;
     }
 
     playSuccessChime();
-    setCountdown(5);
+    setCountdown(4);
     hasTriggeredRef.current = false;
 
-    let remaining = 5;
+    let remaining = 4;
     const interval = setInterval(() => {
       remaining -= 1;
       setCountdown(Math.max(0, remaining));
