@@ -361,11 +361,23 @@ function getSortedLeaderboard(): LeaderboardEntry[] {
       if (bLastSolve === 0) return -1;
       return aLastSolve - bLastSolve;
     }
-    // Fewer total incorrect attempts
+    // Fewer total incorrect attempts (Accuracy)
     if (a.totalFailedAttempts !== b.totalFailedAttempts) {
       return a.totalFailedAttempts - b.totalFailedAttempts;
     }
-    return a.registeredAt - b.registeredAt;
+    // Option B: Fewer total hints unlocked (Purity of solve without clue assistance)
+    const aHintsCount = Object.values(a.hintsUnlocked || {}).reduce(
+      (acc, hList) => acc + (Array.isArray(hList) ? hList.length : 0),
+      0
+    );
+    const bHintsCount = Object.values(b.hintsUnlocked || {}).reduce(
+      (acc, hList) => acc + (Array.isArray(hList) ? hList.length : 0),
+      0
+    );
+    if (aHintsCount !== bHintsCount) {
+      return aHintsCount - bHintsCount;
+    }
+    return a.teamName.localeCompare(b.teamName);
   });
 
   const sorted: LeaderboardEntry[] = teamList.map((team, idx) => ({

@@ -237,6 +237,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
               <li><strong className="text-white">Primary Metric:</strong> Total accumulated points from valid flag decryptions.</li>
               <li><strong className="text-white">Tie-Breaker Level 1:</strong> Earliest recorded UTC timestamp reaching that exact score.</li>
               <li><strong className="text-white">Tie-Breaker Level 2:</strong> Lowest cumulative incorrect submission attempts across all challenges.</li>
+              <li><strong className="text-white">Tie-Breaker Level 3:</strong> Fewest total hints unlocked across all challenges (purity of solve).</li>
               <li><strong className="text-white">Disqualification Condition:</strong> Teams disqualified upon Administrator Arbitration review are positioned at the base of the board.</li>
             </ol>
           </div>

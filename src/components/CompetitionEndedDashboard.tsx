@@ -267,7 +267,7 @@ export const CompetitionEndedDashboard: React.FC<CompetitionEndedDashboardProps>
               COMPLETE OFFICIAL FINAL STANDINGS
             </h3>
             <p className="text-xs text-slate-400 font-sans">
-              All scores certified with zero-bias tie-breakers (Highest Score $\rightarrow$ Earliest Timestamp $\rightarrow$ Fewer Incorrect Attempts).
+              All scores certified with zero-bias tie-breakers (Highest Score $\rightarrow$ Earliest Timestamp $\rightarrow$ Fewer Incorrect Attempts $\rightarrow$ Fewest Hints Unlocked).
             </p>
           </div>
 
