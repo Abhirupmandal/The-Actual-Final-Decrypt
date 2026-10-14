@@ -928,6 +928,7 @@ export default function App() {
                       leaderboard={leaderboard}
                       currentTeam={team}
                       writeupMode={Boolean(competitionState.writeupMode)}
+                      onReplayRocketLaunch={() => setShowRocketLaunch(true)}
                       onOpenWriteupPortal={() => {
                         if (!competitionState.writeupMode) return;
                         const available = challenges.filter((c) => Boolean(c.writeup));
@@ -1017,6 +1018,7 @@ export default function App() {
                   leaderboard={leaderboard}
                   currentTeam={team}
                   writeupMode={Boolean(competitionState.writeupMode)}
+                  onReplayRocketLaunch={() => setShowRocketLaunch(true)}
                   onOpenWriteupPortal={() => {
                     if (!competitionState.writeupMode) return;
                     const available = challenges.filter((c) => Boolean(c.writeup));
