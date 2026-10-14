@@ -46,7 +46,15 @@ export const FeedbackSection: React.FC<FeedbackSectionProps> = ({
   const [customTeamName, setCustomTeamName] = useState<string>('');
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [isSubmitted, setIsSubmitted] = useState<boolean>(false);
+  const [isSubmitted, setIsSubmitted] = useState<boolean>(() => {
+    try {
+      if (localStorage.getItem('ctf_feedback_submitted') === 'true') return true;
+      if (team?.id && localStorage.getItem('ctf_feedback_submitted_' + team.id) === 'true') return true;
+      return false;
+    } catch {
+      return false;
+    }
+  });
   const [submittedTeamName, setSubmittedTeamName] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [redirectCountdown, setRedirectCountdown] = useState<number | null>(null);
@@ -90,6 +98,12 @@ export const FeedbackSection: React.FC<FeedbackSectionProps> = ({
             setSuggestionsRound3(fb.suggestionsRound3);
             setSubmittedTeamName(fb.teamName);
             setIsSubmitted(true);
+            try {
+              localStorage.setItem('ctf_feedback_submitted', 'true');
+              if (team?.id) {
+                localStorage.setItem('ctf_feedback_submitted_' + team.id, 'true');
+              }
+            } catch {}
           }
         }
       } catch {}
@@ -112,6 +126,13 @@ export const FeedbackSection: React.FC<FeedbackSectionProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    // Strict client-side lockout check
+    if (isSubmitted) {
+      setError('Feedback has already been submitted for your squad. The feedback form can only be given once.');
+      playErrorBuzz();
+      return;
+    }
 
     const activeTeamName = team?.teamName || customTeamName.trim();
     if (!activeTeamName) {
@@ -155,6 +176,12 @@ export const FeedbackSection: React.FC<FeedbackSectionProps> = ({
       if (res.ok && data.success) {
         setSubmittedTeamName(activeTeamName);
         setIsSubmitted(true);
+        try {
+          localStorage.setItem('ctf_feedback_submitted', 'true');
+          if (team?.id) {
+            localStorage.setItem('ctf_feedback_submitted_' + team.id, 'true');
+          }
+        } catch {}
         triggerCelebration();
         onFeedbackSubmitted?.();
 
@@ -163,7 +190,13 @@ export const FeedbackSection: React.FC<FeedbackSectionProps> = ({
       } else if (res.status === 409 || data?.alreadySubmitted) {
         setSubmittedTeamName(activeTeamName);
         setIsSubmitted(true);
-        setError(data.error || 'Your squad has already submitted feedback. Multiple submissions are not allowed.');
+        try {
+          localStorage.setItem('ctf_feedback_submitted', 'true');
+          if (team?.id) {
+            localStorage.setItem('ctf_feedback_submitted_' + team.id, 'true');
+          }
+        } catch {}
+        setError(data.error || 'Your squad has already submitted feedback. The feedback form can only be given once.');
         onFeedbackSubmitted?.();
         setRedirectCountdown(3);
       } else {
@@ -253,13 +286,13 @@ export const FeedbackSection: React.FC<FeedbackSectionProps> = ({
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#00ff66]/15 text-[#00ff66] border border-[#00ff66]/40 text-xs font-bold uppercase tracking-wider">
               <CheckCircle2 className="w-4 h-4" />
-              <span>FEEDBACK SUBMISSION RECORDED</span>
+              <span>FEEDBACK SUBMITTED (1 OF 1 ALLOWED)</span>
             </div>
             <h2 className="text-2xl sm:text-4xl font-black text-white tracking-wide uppercase drop-shadow">
               THANK YOU FOR SUBMITTING THE FEEDBACK FORM!
             </h2>
             <p className="text-sm sm:text-base text-emerald-300 font-sans max-w-xl mx-auto font-medium">
-              Thank you for filling the feedback! Your authentic response has been recorded into the official evaluation registry.
+              Thank you for filling the feedback! Your authentic response has been recorded into the official evaluation registry. The feedback form can only be given once per squad.
             </p>
           </div>
 
@@ -292,7 +325,7 @@ export const FeedbackSection: React.FC<FeedbackSectionProps> = ({
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900/90 text-slate-400 border border-slate-800 text-[11px] font-mono">
               <Lock className="w-3.5 h-3.5 text-amber-400" />
-              <span>Feedback is sealed &amp; recorded. Multiple submissions per team are restricted.</span>
+              <span>Feedback is sealed &amp; recorded. The feedback form can only be given once per team.</span>
             </div>
             <button
               onClick={triggerCelebration}

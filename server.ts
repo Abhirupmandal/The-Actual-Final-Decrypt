@@ -2204,13 +2204,13 @@ app.post('/api/feedback', async (req: Request, res: Response) => {
     }
   }
 
-  // Enforce Single Feedback Rule: Multiple feedback submissions from a team are not allowed
+  // Enforce Single Feedback Rule: Feedback can only be given once per team
   const existingFeedback = feedbackStore.getByTeam(resolvedTeamId, resolvedTeamName);
   if (existingFeedback) {
     return res.status(409).json({
       success: false,
       alreadySubmitted: true,
-      error: `Feedback has already been submitted for Team ${existingFeedback.teamName}. Multiple feedback submissions from the same team are strictly restricted.`,
+      error: `Feedback has already been submitted for Team ${existingFeedback.teamName}. The feedback form can only be given once.`,
       feedback: existingFeedback,
     });
   }
@@ -2248,7 +2248,14 @@ app.post('/api/feedback', async (req: Request, res: Response) => {
     submittedAt: Date.now(),
   };
 
-  feedbackStore.save(feedbackRecord);
+  const saved = feedbackStore.save(feedbackRecord);
+  if (!saved) {
+    return res.status(409).json({
+      success: false,
+      alreadySubmitted: true,
+      error: `Feedback has already been recorded for Team ${resolvedTeamName}. The feedback form can only be given once.`,
+    });
+  }
 
   // Broadcast to admin dashboard
   io.emit('admin:feedback_received', feedbackRecord);
@@ -2284,7 +2291,9 @@ app.get('/api/feedback/my', (req: Request, res: Response) => {
     return res.json({ feedback: null });
   }
 
-  const existing = feedbackStore.getByTeamId(verified.payload.subjectId);
+  const teamId = verified.payload.subjectId;
+  const t = teams.get(teamId) || teamStore.getById(teamId);
+  const existing = feedbackStore.getByTeam(teamId, t ? t.teamName : undefined);
   res.json({ feedback: existing });
 });
 

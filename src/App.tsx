@@ -27,6 +27,7 @@ import { StrikeWarningBanner } from './components/StrikeWarningBanner.tsx';
 import { DisqualificationScreen } from './components/DisqualificationScreen.tsx';
 import { BinaryRainBackground } from './components/BinaryRainBackground.tsx';
 import { TopThreePodiumModal } from './components/TopThreePodiumModal.tsx';
+import { LeaderboardTopThreePreview } from './components/LeaderboardTopThreePreview.tsx';
 import { RocketLaunchModal } from './components/RocketLaunchModal.tsx';
 import { CompetitionEndedDashboard } from './components/CompetitionEndedDashboard.tsx';
 import { playSuccessChime, playCyberBlip, playClockTick, playCompetitionOverSound } from './utils/audio.ts';
@@ -992,27 +993,14 @@ export default function App() {
 
             {currentTab === 'leaderboard' && (
               competitionState.status === 'ended' && !hasSubmittedFeedback && !adminToken ? (
-                <div className="max-w-2xl mx-auto my-12 p-6 sm:p-10 rounded-2xl bg-gradient-to-b from-[#140e06] via-[#0b0e18] to-[#04060c] border-2 border-amber-500/70 text-center font-mono space-y-4 shadow-[0_0_50px_rgba(245,158,11,0.25)] animate-fadeIn">
-                  <div className="w-14 h-14 mx-auto rounded-2xl bg-amber-500/20 border border-amber-500/60 flex items-center justify-center text-amber-400">
-                    <Lock className="w-7 h-7" />
-                  </div>
-                  <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-wider">
-                    FINAL LEADERBOARD LOCKED: FEEDBACK REQUIRED
-                  </h2>
-                  <p className="text-xs sm:text-sm text-slate-300 font-sans max-w-lg mx-auto leading-relaxed">
-                    The competition has officially concluded! To access the official final scoreboard and challenge writeups, all participants must submit the mandatory post-event feedback debrief.
-                  </p>
-                  <button
-                    onClick={() => {
-                      playCyberBlip(800);
-                      setCurrentTab('feedback');
-                    }}
-                    className="px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-black font-black uppercase text-xs tracking-wider shadow-[0_0_20px_rgba(245,158,11,0.4)] transition-all cursor-pointer inline-flex items-center gap-2"
-                  >
-                    <span>COMPLETE MANDATORY FEEDBACK TO UNLOCK</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
+                <LeaderboardTopThreePreview
+                  top3={topThreeData.length > 0 ? topThreeData : leaderboard.slice(0, 3)}
+                  totalTeams={leaderboard.length}
+                  onProceedToFeedback={() => {
+                    playCyberBlip(800);
+                    setCurrentTab('feedback');
+                  }}
+                />
               ) : competitionState.status === 'ended' ? (
                 <CompetitionEndedDashboard
                   leaderboard={leaderboard}
@@ -1231,7 +1219,12 @@ export default function App() {
       {/* Victory Podium Modal on Competition End */}
       <TopThreePodiumModal
         isOpen={showVictoryModal}
-        onClose={() => setShowVictoryModal(false)}
+        onClose={() => {
+          setShowVictoryModal(false);
+          if (!hasSubmittedFeedback && !adminToken) {
+            setCurrentTab('feedback');
+          }
+        }}
         top3={topThreeData.length > 0 ? topThreeData : leaderboard.slice(0, 3)}
         totalTeams={leaderboard.length}
         hasSubmittedFeedback={hasSubmittedFeedback}

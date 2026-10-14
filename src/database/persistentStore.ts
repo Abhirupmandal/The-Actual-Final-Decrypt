@@ -1792,10 +1792,17 @@ class SqliteFeedbackStore {
     } catch {}
   }
 
-  public save(feedback: FeedbackSubmission): void {
+  public save(feedback: FeedbackSubmission): boolean {
     try {
+      // Strict rule: feedback can only be given once per team
+      const existing = this.getByTeam(feedback.teamId, feedback.teamName);
+      if (existing) {
+        console.warn(`[SQLite FeedbackStore] Rejecting duplicate feedback for team ${feedback.teamName} (${feedback.teamId})`);
+        return false;
+      }
+
       this.db.run(
-        `INSERT OR REPLACE INTO user_feedbacks (
+        `INSERT INTO user_feedbacks (
           id, team_id, team_name, rating_ui, challenge_difficulty, platform_stability,
           fair_play_security, clarity_rules_hints, favorite_highlight, suggestions_round3, submitted_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
@@ -1818,8 +1825,10 @@ class SqliteFeedbackStore {
       if (postgresSync.isEnabled()) {
         postgresSync.saveFeedback(feedback);
       }
+      return true;
     } catch (err) {
       console.error('[SQLite FeedbackStore] Error saving feedback:', err);
+      return false;
     }
   }
 
@@ -1855,10 +1864,47 @@ class SqliteFeedbackStore {
   public getByTeam(teamId: string, teamName?: string): FeedbackSubmission | null {
     try {
       const cleanName = (teamName || '').toLowerCase().trim();
+      const isAnonId = !teamId || teamId === 'anonymous';
+      const isAnonName = !cleanName || cleanName === 'participant' || cleanName === 'anonymous';
+
+      if (isAnonId && isAnonName) {
+        return null;
+      }
+
+      if (!isAnonId && !isAnonName) {
+        const stmt = this.db.prepare(
+          'SELECT * FROM user_feedbacks WHERE team_id = ? OR (team_name != "" AND LOWER(TRIM(team_name)) = ?) ORDER BY submitted_at DESC LIMIT 1;'
+        );
+        stmt.bind([teamId, cleanName]);
+        if (stmt.step()) {
+          const row = stmt.getAsObject();
+          stmt.free();
+          return {
+            id: String(row.id),
+            teamId: String(row.team_id),
+            teamName: String(row.team_name),
+            ratingUi: Number(row.rating_ui),
+            challengeDifficulty: String(row.challenge_difficulty),
+            platformStability: Number(row.platform_stability),
+            fairPlaySecurity: String(row.fair_play_security),
+            clarityRulesHints: Number(row.clarity_rules_hints),
+            favoriteHighlight: String(row.favorite_highlight || ''),
+            suggestionsRound3: String(row.suggestions_round3 || ''),
+            submittedAt: Number(row.submitted_at),
+          };
+        }
+        stmt.free();
+        return null;
+      }
+
+      if (!isAnonId) {
+        return this.getByTeamId(teamId);
+      }
+
       const stmt = this.db.prepare(
-        'SELECT * FROM user_feedbacks WHERE team_id = ? OR (team_name != "" AND LOWER(TRIM(team_name)) = ?) ORDER BY submitted_at DESC LIMIT 1;'
+        'SELECT * FROM user_feedbacks WHERE team_name != "" AND LOWER(TRIM(team_name)) = ? ORDER BY submitted_at DESC LIMIT 1;'
       );
-      stmt.bind([teamId, cleanName]);
+      stmt.bind([cleanName]);
       if (stmt.step()) {
         const row = stmt.getAsObject();
         stmt.free();
