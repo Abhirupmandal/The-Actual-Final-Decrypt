@@ -964,7 +964,7 @@ export default function App() {
             {currentTab === 'challenges' && (
               <>
                 {competitionState.status === 'ended' ? (
-                  !hasSubmittedFeedback && !adminToken ? (
+                  !hasSubmittedFeedback ? (
                     <FeedbackSection
                       team={team}
                       isMandatoryIntermission={true}
@@ -1040,7 +1040,7 @@ export default function App() {
             )}
 
             {currentTab === 'leaderboard' && (
-              competitionState.status === 'ended' && !hasSubmittedFeedback && !adminToken ? (
+              competitionState.status === 'ended' && !hasSubmittedFeedback ? (
                 <LeaderboardTopThreePreview
                   top3={topThreeData.length > 0 ? topThreeData : leaderboard.slice(0, 3)}
                   totalTeams={leaderboard.length}
@@ -1110,18 +1110,10 @@ export default function App() {
                   onNavigateToChallenges={() => setCurrentTab('challenges')}
                   onNavigateToLeaderboard={() => setCurrentTab('leaderboard')}
                 />
-              ) : !team && !adminToken ? (
-                <GuestRestrictedTabCard
-                  title="FEEDBACK PORTAL: SQUAD LOGIN REQUIRED"
-                  description="Competition feedback evaluations are linked to registered participating squads. Please register your squad or sign in to share your tournament experience."
-                  onOpenAuthModal={() => setIsAuthModalOpen(true)}
-                  onNavigateToRules={() => setCurrentTab('rules')}
-                  onNavigateToLeaderboard={() => setCurrentTab('leaderboard')}
-                />
               ) : (
                 <FeedbackSection
                   team={team}
-                  isMandatoryIntermission={competitionState.status === 'ended' && !hasSubmittedFeedback && !adminToken}
+                  isMandatoryIntermission={competitionState.status === 'ended' && !hasSubmittedFeedback}
                   onOpenAuthModal={() => setIsAuthModalOpen(true)}
                   onUnlockFinalDashboard={handleUnlockAndShowDashboard}
                   onFeedbackSubmitted={handleFeedbackSubmittedSuccess}
@@ -1269,8 +1261,10 @@ export default function App() {
         isOpen={showVictoryModal}
         onClose={() => {
           setShowVictoryModal(false);
-          if (!hasSubmittedFeedback && !adminToken) {
+          if (!hasSubmittedFeedback) {
             setCurrentTab('feedback');
+          } else {
+            setCurrentTab('leaderboard');
           }
         }}
         top3={topThreeData.length > 0 ? topThreeData : leaderboard.slice(0, 3)}
@@ -1282,7 +1276,7 @@ export default function App() {
         }}
         onViewDashboard={() => {
           setShowVictoryModal(false);
-          if (!hasSubmittedFeedback && !adminToken) {
+          if (!hasSubmittedFeedback) {
             setCurrentTab('feedback');
           } else {
             handleUnlockAndShowDashboard();
