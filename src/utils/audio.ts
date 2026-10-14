@@ -236,3 +236,69 @@ export function playCompetitionOverSound() {
   } catch (e) {}
 }
 
+// Cinematic Rocket Launch & Thruster Roar Sound FX
+export function playRocketLaunchSound() {
+  if (isMuted) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  try {
+    const now = ctx.currentTime;
+    const duration = 4.2;
+
+    // 1. Low frequency engine rumble & resonance
+    const rumbleOsc = ctx.createOscillator();
+    const rumbleGain = ctx.createGain();
+    rumbleOsc.type = 'sawtooth';
+    rumbleOsc.frequency.setValueAtTime(55, now);
+    rumbleOsc.frequency.exponentialRampToValueAtTime(140, now + 1.5);
+    rumbleOsc.frequency.exponentialRampToValueAtTime(450, now + duration);
+
+    rumbleGain.gain.setValueAtTime(0.01, now);
+    rumbleGain.gain.linearRampToValueAtTime(0.08, now + 1.2);
+    rumbleGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+    rumbleOsc.connect(rumbleGain);
+    rumbleGain.connect(ctx.destination);
+    rumbleOsc.start(now);
+    rumbleOsc.stop(now + duration);
+
+    // 2. Thruster jet exhaust roar (white noise bandpass filter sweep)
+    const bufferSize = Math.floor(ctx.sampleRate * 3.5);
+    const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      output[i] = (Math.random() * 2 - 1) * 0.6;
+    }
+
+    const whiteNoise = ctx.createBufferSource();
+    whiteNoise.buffer = noiseBuffer;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(200, now);
+    filter.frequency.exponentialRampToValueAtTime(1800, now + 2.5);
+    filter.Q.value = 3.0;
+
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.01, now);
+    noiseGain.gain.linearRampToValueAtTime(0.09, now + 1.2);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 3.5);
+
+    whiteNoise.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(ctx.destination);
+
+    whiteNoise.start(now);
+    whiteNoise.stop(now + 3.5);
+
+    // 3. Victory arrival chime when entering orbit
+    setTimeout(() => {
+      try {
+        playSuccessChime();
+      } catch {}
+    }, 3200);
+  } catch (e) {}
+}
+
+

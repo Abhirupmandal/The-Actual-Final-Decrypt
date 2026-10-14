@@ -27,6 +27,7 @@ import { StrikeWarningBanner } from './components/StrikeWarningBanner.tsx';
 import { DisqualificationScreen } from './components/DisqualificationScreen.tsx';
 import { BinaryRainBackground } from './components/BinaryRainBackground.tsx';
 import { TopThreePodiumModal } from './components/TopThreePodiumModal.tsx';
+import { RocketLaunchModal } from './components/RocketLaunchModal.tsx';
 import { CompetitionEndedDashboard } from './components/CompetitionEndedDashboard.tsx';
 import { playSuccessChime, playCyberBlip, playClockTick, playCompetitionOverSound } from './utils/audio.ts';
 import { Maximize2, Heart, Lock, ArrowRight, UserPlus, BookOpen, Trophy } from 'lucide-react';
@@ -174,6 +175,7 @@ export default function App() {
   });
 
   // Victory Ceremony & Final Podium Modal
+  const [showRocketLaunch, setShowRocketLaunch] = useState(false);
   const [showVictoryModal, setShowVictoryModal] = useState(false);
   const [topThreeData, setTopThreeData] = useState<LeaderboardEntry[]>([]);
 
@@ -354,7 +356,7 @@ export default function App() {
           setTopThreeData(top3);
           const shown = sessionStorage.getItem('ctf_podium_shown');
           if (shown !== 'true') {
-            setShowVictoryModal(true);
+            setShowRocketLaunch(true);
             sessionStorage.setItem('ctf_podium_shown', 'true');
           }
         }
@@ -615,7 +617,15 @@ export default function App() {
       setActiveAnnouncement(null);
     });
 
-    s.on('competition_ended', () => {
+    s.on('competition_ended', (data?: any) => {
+      if (data?.top3) {
+        setTopThreeData(data.top3);
+      }
+      const shown = sessionStorage.getItem('ctf_podium_shown');
+      if (shown !== 'true') {
+        setShowRocketLaunch(true);
+        sessionStorage.setItem('ctf_podium_shown', 'true');
+      }
       fetchState();
     });
 
@@ -1207,6 +1217,15 @@ export default function App() {
         />
       )}
 
+      {/* Cinematic Rocket Launch Sequence on Event End */}
+      <RocketLaunchModal
+        isOpen={showRocketLaunch}
+        onComplete={() => {
+          setShowRocketLaunch(false);
+          setShowVictoryModal(true);
+        }}
+      />
+
       {/* Victory Podium Modal on Competition End */}
       <TopThreePodiumModal
         isOpen={showVictoryModal}
@@ -1214,6 +1233,10 @@ export default function App() {
         top3={topThreeData.length > 0 ? topThreeData : leaderboard.slice(0, 3)}
         totalTeams={leaderboard.length}
         hasSubmittedFeedback={hasSubmittedFeedback}
+        onReplayRocketLaunch={() => {
+          setShowVictoryModal(false);
+          setShowRocketLaunch(true);
+        }}
         onViewDashboard={() => {
           setShowVictoryModal(false);
           if (!hasSubmittedFeedback && !adminToken) {
