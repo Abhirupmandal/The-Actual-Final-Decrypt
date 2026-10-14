@@ -1334,10 +1334,6 @@ class SqliteLeaderboardStore {
       CREATE INDEX IF NOT EXISTS idx_leaderboard_rank ON leaderboard(rank ASC);
       CREATE INDEX IF NOT EXISTS idx_leaderboard_score ON leaderboard(score DESC);
 
-      try {
-        this.db.run('ALTER TABLE leaderboard ADD COLUMN first_bloods_count INTEGER NOT NULL DEFAULT 0;');
-      } catch (_) {}
-
       CREATE TABLE IF NOT EXISTS leaderboard_snapshots (
         id TEXT PRIMARY KEY,
         timestamp INTEGER NOT NULL,
@@ -1345,6 +1341,10 @@ class SqliteLeaderboardStore {
       );
       CREATE INDEX IF NOT EXISTS idx_snapshots_timestamp ON leaderboard_snapshots(timestamp DESC);
     `);
+
+    try {
+      this.db.run('ALTER TABLE leaderboard ADD COLUMN first_bloods_count INTEGER NOT NULL DEFAULT 0;');
+    } catch (_) {}
   }
 
   public syncLeaderboard(entries: LeaderboardEntry[]): void {
