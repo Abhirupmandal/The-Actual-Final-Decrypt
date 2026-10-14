@@ -4,14 +4,20 @@ import { Skull, AlertOctagon, ShieldAlert, LogOut, Terminal, Lock } from 'lucide
 interface DisqualificationScreenProps {
   teamName?: string;
   reason?: string;
+  strikes?: number;
+  maxStrikes?: number;
   onLogout: () => void;
 }
 
 export const DisqualificationScreen: React.FC<DisqualificationScreenProps> = ({
   teamName = 'TEAM',
-  reason = '5-Strike Security Violation Limit Exceeded',
+  reason = 'Disqualified by Competition Arbitration',
+  strikes = 0,
+  maxStrikes = 10,
   onLogout,
 }) => {
+  const isMaxLimitReached = strikes >= maxStrikes;
+
   return (
     <div className="fixed inset-0 z-[9999] bg-[#050000] text-red-500 font-mono flex flex-col items-center justify-center p-6 select-none overflow-hidden animate-fadeIn">
       {/* Glitch CRT Overlay */}
@@ -31,7 +37,9 @@ export const DisqualificationScreen: React.FC<DisqualificationScreenProps> = ({
         <div>
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-red-950/90 border border-red-500 text-xs font-black uppercase tracking-widest text-red-400 mb-2 shadow-[0_0_15px_rgba(239,68,68,0.4)]">
             <AlertOctagon className="w-4 h-4 text-red-500 animate-bounce" />
-            <span>MAXIMUM WARNING LIMIT REACHED</span>
+            <span>
+              {isMaxLimitReached ? 'MAXIMUM WARNING LIMIT REACHED' : 'ADMINISTRATOR ARBITRATION DISQUALIFICATION'}
+            </span>
           </div>
           <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-white drop-shadow-[0_0_20px_rgba(255,0,0,0.8)]">
             [DISQUALIFIED]
@@ -48,7 +56,11 @@ export const DisqualificationScreen: React.FC<DisqualificationScreenProps> = ({
           </div>
           <div className="flex justify-between border-b border-red-900/50 pb-2">
             <span className="text-slate-400">WARNINGS:</span>
-            <span className="text-red-400 font-bold">10 / 10 (LIMIT REACHED)</span>
+            <span className="text-red-400 font-bold">
+              {isMaxLimitReached
+                ? `${strikes} / ${maxStrikes} (LIMIT REACHED)`
+                : `${strikes} / ${maxStrikes} INCIDENTS RECORDED`}
+            </span>
           </div>
           <div className="flex justify-between border-b border-red-900/50 pb-2">
             <span className="text-slate-400">REASON:</span>
@@ -61,7 +73,9 @@ export const DisqualificationScreen: React.FC<DisqualificationScreenProps> = ({
         </div>
 
         <p className="text-xs text-slate-400 leading-relaxed font-sans max-w-md mx-auto">
-          Your team has reached the maximum warning threshold or attempted to inspect webpage code. If you have questions regarding this decision, please speak with an event coordinator.
+          {isMaxLimitReached
+            ? 'Your team has reached the maximum warning threshold. If you have questions regarding this decision, please speak with an event coordinator.'
+            : 'Your team has been disqualified by tournament administration. If you have questions regarding this decision, please speak with an event coordinator.'}
         </p>
 
         <div className="pt-2">

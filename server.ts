@@ -3268,7 +3268,7 @@ app.post('/api/admin/teams/reset-all-ready', requireAdminAuth, async (req: Reque
   res.json({ success: true, message: 'All squads reset back to Pre-Competition Gate.' });
 });
 
-// Admin Manual Disqualify (Strict 10-Strike Cap)
+// Admin Manual Disqualify
 app.post('/api/admin/teams/:id/disqualify', requireAdminAuth, async (req: Request, res: Response) => {
   const team = teams.get(req.params.id) || teamStore.getById(req.params.id);
   if (!team) return res.status(404).json({ success: false, error: 'Team not found' });
@@ -3278,13 +3278,11 @@ app.post('/api/admin/teams/:id/disqualify', requireAdminAuth, async (req: Reques
       ? req.body.reason.trim()
       : 'Manual Disqualification by Competition Arbitration';
 
-  team.strikes = 10;
   team.isDisqualified = true;
   team.disqualifiedAt = Date.now();
   team.disqualifiedReason = customReason;
   teams.set(team.id, team);
   teamStore.update(team.id, {
-    strikes: 10,
     isDisqualified: true,
     disqualifiedAt: team.disqualifiedAt,
     disqualifiedReason: team.disqualifiedReason,
@@ -3309,6 +3307,7 @@ app.post('/api/admin/teams/:id/disqualify', requireAdminAuth, async (req: Reques
     teamId: team.id,
     teamName: team.teamName,
     reason: team.disqualifiedReason,
+    strikes: team.strikes || 0,
   });
 
   await redisCache.invalidate('cache:');

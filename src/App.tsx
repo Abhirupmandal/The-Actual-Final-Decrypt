@@ -589,13 +589,23 @@ export default function App() {
       }
     });
 
-    s.on('team_disqualified', (disqData: { teamId: string; teamName: string; reason: string }) => {
+    s.on('team_disqualified', (disqData: { teamId: string; teamName: string; reason: string; strikes?: number }) => {
       fetchState();
       setTeam((current) => {
         if (current && current.id === disqData.teamId) {
           setIsDisqualified(true);
           setDisqualifiedReason(disqData.reason);
           setFocusBannerWarning(null);
+          const updated = {
+            ...current,
+            isDisqualified: true,
+            disqualifiedReason: disqData.reason,
+            strikes: typeof disqData.strikes === 'number' ? disqData.strikes : current.strikes,
+          };
+          try {
+            localStorage.setItem('ctf_team_data', JSON.stringify(updated));
+          } catch {}
+          return updated;
         }
         return current;
       });
@@ -1346,6 +1356,8 @@ export default function App() {
         <DisqualificationScreen
           teamName={team?.teamName}
           reason={disqualifiedReason}
+          strikes={team?.strikes || 0}
+          maxStrikes={10}
           onLogout={handleTeamLogout}
         />
       )}
