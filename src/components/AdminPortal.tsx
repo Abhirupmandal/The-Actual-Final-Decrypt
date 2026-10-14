@@ -112,6 +112,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
   // Master Timer Control Center State
   const [customTimerMinutes, setCustomTimerMinutes] = useState('');
+  const [customExtraMinutes, setCustomExtraMinutes] = useState('1');
   const [showRestartModal, setShowRestartModal] = useState(false);
   const [restartDurationMinutes, setRestartDurationMinutes] = useState(120);
   const [customRestartInput, setCustomRestartInput] = useState('');
@@ -430,6 +431,15 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     }
     handleTimerAction('set', mins * 60);
     setCustomTimerMinutes('');
+  };
+
+  const handleApplyCustomExtraTime = (action: 'add' | 'subtract') => {
+    const mins = parseInt(customExtraMinutes.trim(), 10);
+    if (isNaN(mins) || mins < 1) {
+      setNotification({ type: 'error', text: 'Please enter a valid extra time in minutes (at least 1 minute).' });
+      return;
+    }
+    handleTimerAction(action, mins * 60);
   };
 
   const handleConfirmRestartTimer = () => {
@@ -1481,19 +1491,46 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               </div>
             </div>
 
-            {/* Quick Time Adjusters: ADD & SUBTRACT */}
+            {/* Quick Time Adjusters: ADD EXTRA TIME & SUBTRACT */}
             <div className="space-y-2 pt-1 border-t border-slate-800/60">
               <div className="flex items-center justify-between text-[10px] text-slate-400 uppercase font-bold tracking-wider">
-                <span>Quick Time Adjusters</span>
-                <span className="text-[9px] text-slate-400 font-normal">Real-time sync</span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Quick Extra Time Adjusters
+                </span>
+                <span className="text-[9px] text-slate-400 font-normal">Real-time broadcast to all teams</span>
               </div>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {/* 1 Min Extra - Prominently Highlighted */}
+                <button
+                  type="button"
+                  onClick={() => handleTimerAction('add', 60)}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-500/25 hover:bg-emerald-500/40 text-emerald-300 font-bold border border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.2)] transition-all cursor-pointer flex items-center gap-1"
+                  title="Instantly add 1 minute extra to the live competition clock"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+1 Min Extra</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTimerAction('add', 120)}
+                  className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-emerald-500/20 hover:text-emerald-300 hover:border-emerald-500/40 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+                >
+                  +2 Min
+                </button>
                 <button
                   type="button"
                   onClick={() => handleTimerAction('add', 300)}
                   className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-emerald-500/20 hover:text-emerald-300 hover:border-emerald-500/40 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
                 >
                   +5 Min
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTimerAction('add', 600)}
+                  className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-emerald-500/20 hover:text-emerald-300 hover:border-emerald-500/40 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+                >
+                  +10 Min
                 </button>
                 <button
                   type="button"
@@ -1509,16 +1546,17 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 >
                   +30 Min
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleTimerAction('add', 3600)}
-                  className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-emerald-500/20 hover:text-emerald-300 hover:border-emerald-500/40 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
-                >
-                  +60 Min
-                </button>
 
                 <div className="h-6 w-px bg-slate-800 mx-1 self-center" />
 
+                <button
+                  type="button"
+                  onClick={() => handleTimerAction('subtract', 60)}
+                  className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/40 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+                  title="Deduct 1 minute from competition clock"
+                >
+                  -1 Min
+                </button>
                 <button
                   type="button"
                   onClick={() => handleTimerAction('subtract', 300)}
@@ -1540,35 +1578,134 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                 >
                   -30 Min
                 </button>
+              </div>
+            </div>
+
+            {/* Give Custom Extra Minutes Form */}
+            <div className="pt-2 border-t border-slate-800/60 space-y-1.5">
+              <div className="flex items-center justify-between text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                <span>Give Custom Extra Minutes (or deduct)</span>
+                <span className="text-[9px] text-slate-500">Adds/subtracts to current remaining time</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type="number"
+                    min="1"
+                    max="720"
+                    value={customExtraMinutes}
+                    onChange={(e) => setCustomExtraMinutes(e.target.value)}
+                    placeholder="Extra minutes (e.g. 1, 3, 10)..."
+                    className="w-full bg-[#050811] border border-slate-800 rounded-lg px-3 py-1.5 text-white text-xs outline-none focus:border-emerald-500 transition-colors"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 pointer-events-none">MINS</span>
+                </div>
                 <button
                   type="button"
-                  onClick={() => handleTimerAction('subtract', 3600)}
-                  className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-red-500/20 hover:text-red-300 hover:border-red-500/40 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+                  onClick={() => handleApplyCustomExtraTime('add')}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 border border-emerald-500/50 font-bold text-xs shrink-0 transition-colors cursor-pointer flex items-center gap-1"
                 >
-                  -60 Min
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ ADD EXTRA TIME</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleApplyCustomExtraTime('subtract')}
+                  className="px-2.5 py-1.5 rounded-lg bg-red-900/30 hover:bg-red-900/50 text-red-300 border border-red-700/50 font-bold text-xs shrink-0 transition-colors cursor-pointer"
+                >
+                  - DEDUCT
+                </button>
+              </div>
+            </div>
+
+            {/* Quick 1-Click Exact Preset Durations (including 12 Mins requested) */}
+            <div className="pt-2 border-t border-slate-800/60 space-y-1.5">
+              <div className="flex items-center justify-between text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                <span>Set Exact Preset Duration</span>
+                <span className="text-[9px] text-slate-500">Sets timer to exact duration</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleTimerAction('set', 12 * 60)}
+                  className="px-3 py-1.5 rounded-lg bg-cyan-500/25 hover:bg-cyan-500/40 text-cyan-200 border border-cyan-400 font-bold text-xs shadow-[0_0_8px_rgba(6,182,212,0.25)] transition-all cursor-pointer flex items-center gap-1"
+                  title="Set clock to exactly 12 minutes"
+                >
+                  <Clock className="w-3.5 h-3.5 text-cyan-300" />
+                  <span>12 MINS</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTimerAction('set', 15 * 60)}
+                  className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-cyan-500/20 hover:text-cyan-300 hover:border-cyan-500/40 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+                >
+                  15 Mins
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTimerAction('set', 30 * 60)}
+                  className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-cyan-500/20 hover:text-cyan-300 hover:border-cyan-500/40 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+                >
+                  30 Mins
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTimerAction('set', 45 * 60)}
+                  className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-cyan-500/20 hover:text-cyan-300 hover:border-cyan-500/40 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+                >
+                  45 Mins
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTimerAction('set', 60 * 60)}
+                  className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-cyan-500/20 hover:text-cyan-300 hover:border-cyan-500/40 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+                >
+                  60 Mins (1h)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTimerAction('set', 90 * 60)}
+                  className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-cyan-500/20 hover:text-cyan-300 hover:border-cyan-500/40 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+                >
+                  90 Mins (1.5h)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTimerAction('set', 120 * 60)}
+                  className="px-2.5 py-1.5 rounded bg-slate-800 hover:bg-cyan-500/20 hover:text-cyan-300 hover:border-cyan-500/40 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+                >
+                  120 Mins (2h)
                 </button>
               </div>
             </div>
 
             {/* Custom Exact Time Form */}
-            <form onSubmit={handleApplyCustomTime} className="pt-2 border-t border-slate-800/60 flex items-center gap-2">
-              <div className="relative flex-1">
-                <input
-                  type="number"
-                  min="1"
-                  max="1440"
-                  value={customTimerMinutes}
-                  onChange={(e) => setCustomTimerMinutes(e.target.value)}
-                  placeholder="Set exact minutes (e.g. 90)..."
-                  className="w-full bg-[#050811] border border-slate-800 rounded-lg px-3 py-1.5 text-white text-xs outline-none focus:border-cyan-500 transition-colors"
-                />
+            <form onSubmit={handleApplyCustomTime} className="pt-2 border-t border-slate-800/60 space-y-1.5">
+              <div className="flex items-center justify-between text-[10px] text-slate-400 uppercase font-bold tracking-wider">
+                <span>Set Any Custom Exact Duration</span>
+                <span className="text-[9px] text-slate-500">1 – 1440 mins</span>
               </div>
-              <button
-                type="submit"
-                className="px-3.5 py-1.5 rounded-lg bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-200 border border-cyan-500/50 font-bold text-xs shrink-0 transition-colors cursor-pointer"
-              >
-                SET TIME
-              </button>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type="number"
+                    min="1"
+                    max="1440"
+                    value={customTimerMinutes}
+                    onChange={(e) => setCustomTimerMinutes(e.target.value)}
+                    placeholder="Enter custom minutes (e.g. 12, 25, 100)..."
+                    className="w-full bg-[#050811] border border-slate-800 rounded-lg px-3 py-1.5 text-white text-xs outline-none focus:border-cyan-500 transition-colors"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 pointer-events-none">MINS</span>
+                </div>
+                <button
+                  type="submit"
+                  className="px-3.5 py-1.5 rounded-lg bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-200 border border-cyan-500/50 font-bold text-xs shrink-0 transition-colors cursor-pointer flex items-center gap-1.5"
+                >
+                  <Clock className="w-3.5 h-3.5 text-cyan-300" />
+                  <span>SET EXACT TIME</span>
+                </button>
+              </div>
             </form>
           </div>
 
@@ -4186,6 +4323,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               </div>
               <div className="grid grid-cols-3 gap-2">
                 {[
+                  { label: '12 Mins', mins: 12 },
+                  { label: '30 Mins', mins: 30 },
                   { label: '1 Hour', mins: 60 },
                   { label: '2 Hours (Std)', mins: 120 },
                   { label: '3 Hours', mins: 180 },
