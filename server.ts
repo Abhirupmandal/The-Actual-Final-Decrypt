@@ -61,6 +61,7 @@ import {
   leaderboardStore,
   auditLogStore,
   feedbackStore,
+  postgresSync,
 } from './src/database/persistentStore.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -352,11 +353,13 @@ function getSortedLeaderboard(): LeaderboardEntry[] {
     }
 
     // 4. Tie-breakers:
-    // Earliest timestamp reaching that score
-    if (a.lastSolveTime !== b.lastSolveTime) {
-      if (a.lastSolveTime === 0) return 1;
-      if (b.lastSolveTime === 0) return -1;
-      return a.lastSolveTime - b.lastSolveTime;
+    // Earliest timestamp reaching that score (only applies if actual challenges were solved)
+    const aLastSolve = Object.keys(a.solves || {}).length > 0 ? (a.lastSolveTime || 0) : 0;
+    const bLastSolve = Object.keys(b.solves || {}).length > 0 ? (b.lastSolveTime || 0) : 0;
+    if (aLastSolve !== bLastSolve) {
+      if (aLastSolve === 0) return 1;
+      if (bLastSolve === 0) return -1;
+      return aLastSolve - bLastSolve;
     }
     // Fewer total incorrect attempts
     if (a.totalFailedAttempts !== b.totalFailedAttempts) {
@@ -373,7 +376,7 @@ function getSortedLeaderboard(): LeaderboardEntry[] {
     score: team.score,
     solvesCount: Object.keys(team.solves).length,
     totalFailedAttempts: team.totalFailedAttempts,
-    lastSolveTime: team.lastSolveTime,
+    lastSolveTime: Object.keys(team.solves || {}).length > 0 ? team.lastSolveTime : 0,
     strikes: team.strikes || 0,
     isDisqualified: Boolean(team.isDisqualified),
     isFlaggedAnomaly: team.isFlaggedAnomaly,
@@ -914,7 +917,7 @@ app.post('/api/auth/signup', (req: Request, res: Response) => {
     hintsUnlocked: {},
     failedAttempts: {},
     totalFailedAttempts: 0,
-    lastSolveTime: Date.now(),
+    lastSolveTime: 0,
     registeredAt: Date.now(),
     ip,
     strikes: 0,
@@ -1186,7 +1189,7 @@ app.post('/api/auth/team', (req: Request, res: Response) => {
       hintsUnlocked: {},
       failedAttempts: {},
       totalFailedAttempts: 0,
-      lastSolveTime: Date.now(),
+      lastSolveTime: 0,
       registeredAt: Date.now(),
       ip,
       strikes: 0,
@@ -2688,6 +2691,11 @@ app.post('/api/admin/reset', requireAdminAuth, async (req: Request, res: Respons
   // 1. Wipe all teams from memory, SQLite database, and disk backup
   teams.clear();
   teamStore.clearAll();
+
+  // Also wipe remote Supabase PostgreSQL tables so testing teams do not persist or resurrect
+  if (postgresSync.isEnabled()) {
+    await postgresSync.wipeAll();
+  }
 
   // 2. Wipe user activities
   activityFeed = [];

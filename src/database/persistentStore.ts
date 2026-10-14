@@ -430,6 +430,9 @@ class SqliteTeamStore {
     try {
       this.db.run('DELETE FROM teams;');
       this.syncToDisk();
+      if (postgresSync.isEnabled()) {
+        postgresSync.wipeAll().catch((err) => console.error('[PostgreSQL] wipeAll error:', err));
+      }
     } catch (err) {
       console.error('[SQLite TeamStore] Error clearing teams:', err);
     }
@@ -1833,5 +1836,7 @@ if (postgresSync.isEnabled()) {
     }
   });
 }
+
+export { postgresSync };
 
 
