@@ -219,18 +219,17 @@ export const SecurityGuard: React.FC<SecurityGuardProps> = ({
         return;
       }
 
-      // Detect Windows key + Shift combo (Windows Snipping Tool: Win+Shift+S)
-      if (
+      // Detect Windows Snipping Tool: Win+Shift+S or Meta+Shift combinations
+      const isWinShiftS =
+        (e.shiftKey && (keyLower === 's' || code === 'KeyS') && (e.metaKey || e.ctrlKey)) ||
         (e.metaKey && e.shiftKey) ||
-        (e.key === 'Meta' && e.shiftKey) ||
-        (e.shiftKey && (e.code === 'MetaLeft' || e.code === 'MetaRight')) ||
-        (e.metaKey && (e.code === 'ShiftLeft' || e.code === 'ShiftRight')) ||
-        (e.key === 's' && (e.metaKey || (e.ctrlKey && e.shiftKey)))
-      ) {
+        (e.key === 'Meta' && e.shiftKey);
+
+      if (isWinShiftS) {
         metaShiftPressedTime.current = Date.now();
         lastCaptureTimeRef.current = Date.now();
         isCaptureInProgressRef.current = true;
-        triggerScreenshotBlackout(4000);
+        triggerScreenshotBlackout(3500);
         reportScreenshotAttempt('Win+Shift+S', 'Screen capture attempt (Win+Shift+S) blocked and blurred.');
         return;
       }
@@ -242,7 +241,7 @@ export const SecurityGuard: React.FC<SecurityGuardProps> = ({
         ctrlShiftPressedTime.current = Date.now();
         lastCaptureTimeRef.current = Date.now();
         isCaptureInProgressRef.current = true;
-        triggerScreenshotBlackout(4000);
+        triggerScreenshotBlackout(3500);
         reportScreenshotAttempt('Ctrl+Shift+S', 'Screen capture (Ctrl+Shift+S) blocked and blurred.');
         return;
       }
@@ -253,7 +252,7 @@ export const SecurityGuard: React.FC<SecurityGuardProps> = ({
         e.stopPropagation();
         lastCaptureTimeRef.current = Date.now();
         isCaptureInProgressRef.current = true;
-        triggerScreenshotBlackout(4000);
+        triggerScreenshotBlackout(3500);
         reportScreenshotAttempt(`Cmd+Shift+${keyLower}`, 'Screen capture blocked and blurred.');
         return;
       }
@@ -297,20 +296,32 @@ export const SecurityGuard: React.FC<SecurityGuardProps> = ({
         printScreenPressedTime.current = Date.now();
         lastCaptureTimeRef.current = Date.now();
         isCaptureInProgressRef.current = true;
-        triggerScreenshotBlackout(4000);
+        triggerScreenshotBlackout(3500);
         reportScreenshotAttempt('PrintScreen', 'PrintScreen key released. Screen blurred and shielded.');
       }
     };
 
-    // 3. Window Blur: If Snipping Tool, Win+Shift+S, Lightshot, or any capture tool activates, OS blurs the browser window
-    // The screen blurs IMMEDIATELY so any captured snapshot contains only a blurred/shielded image!
+    // 3. Window Blur: ONLY maintain blackout/blur if a screenshot shortcut was actually initiated right before blur!
+    // Regular window switches or page refreshes will NEVER trigger blackout or warnings.
     const handleBlur = () => {
       if (isAdmin) return;
-      isCaptureInProgressRef.current = true;
-      triggerScreenshotBlackout(0);
+      const now = Date.now();
+      const isScreenshotInitiated =
+        isCaptureInProgressRef.current ||
+        (metaShiftPressedTime.current > 0 && now - metaShiftPressedTime.current < 3000) ||
+        (printScreenPressedTime.current > 0 && now - printScreenPressedTime.current < 3000) ||
+        (ctrlShiftPressedTime.current > 0 && now - ctrlShiftPressedTime.current < 3000) ||
+        (lastCaptureTimeRef.current > 0 && now - lastCaptureTimeRef.current < 3000);
+
+      if (isScreenshotInitiated) {
+        isCaptureInProgressRef.current = true;
+        triggerScreenshotBlackout(0);
+      } else {
+        isCaptureInProgressRef.current = false;
+      }
     };
 
-    // 4. Window Focus: Once student returns to browser, safely restore screen after short delay
+    // 4. Window Focus: Once student returns to browser, safely restore screen immediately
     const handleFocus = () => {
       if (isAdmin) return;
       setTimeout(() => {
@@ -320,20 +331,17 @@ export const SecurityGuard: React.FC<SecurityGuardProps> = ({
         printScreenPressedTime.current = 0;
         ctrlShiftPressedTime.current = 0;
         clearBlackout();
-      }, 350);
+      }, 200);
     };
 
-    // 5. Visibility Change: When switching tabs or window minimizing
+    // 5. Visibility Change: Ensure screen clears when tab becomes visible
     const handleVisibilityChange = () => {
       if (isAdmin) return;
-      if (document.visibilityState === 'hidden') {
-        isCaptureInProgressRef.current = true;
-        triggerScreenshotBlackout(0);
-      } else {
+      if (document.visibilityState === 'visible') {
         setTimeout(() => {
           isCaptureInProgressRef.current = false;
           clearBlackout();
-        }, 350);
+        }, 200);
       }
     };
 
