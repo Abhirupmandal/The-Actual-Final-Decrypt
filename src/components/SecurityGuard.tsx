@@ -37,6 +37,13 @@ export const SecurityGuard: React.FC<SecurityGuardProps> = ({
   const printScreenPressedTime = useRef<number>(0);
   const ctrlShiftPressedTime = useRef<number>(0);
 
+  // Maintain refs for team and onStrikeTriggered so strikes updates DO NOT trigger useEffect cleanup
+  const teamRef = useRef(team);
+  teamRef.current = team;
+
+  const onStrikeTriggeredRef = useRef(onStrikeTriggered);
+  onStrikeTriggeredRef.current = onStrikeTriggered;
+
   const clearBlackout = useCallback(() => {
     if (blankoutTimerRef.current) {
       clearTimeout(blankoutTimerRef.current);
@@ -54,8 +61,8 @@ export const SecurityGuard: React.FC<SecurityGuardProps> = ({
     isCaptureInProgressRef.current = false;
   }, []);
 
-  // Synchronously blackout the entire screen so any captured screenshot image is 100% pitch black
-  const triggerScreenshotBlackout = useCallback((durationMs = 3000) => {
+  // Synchronously blackout & blur the entire screen so any captured screenshot image is heavily blurred and shielded
+  const triggerScreenshotBlackout = useCallback((durationMs = 4000) => {
     // Zero blackout in the admin section OR when student has not started the competition
     if (isAdmin || !teamLoggedIn || !isReadyToStart) return;
 
@@ -65,10 +72,23 @@ export const SecurityGuard: React.FC<SecurityGuardProps> = ({
       curtain = document.createElement('div');
       curtain.id = 'drm-global-blackout-curtain';
       curtain.style.cssText =
-        'position:fixed!important;top:0!important;left:0!important;right:0!important;bottom:0!important;width:100vw!important;height:100vh!important;background:#000000!important;background-color:#000000!important;z-index:2147483647!important;pointer-events:none!important;display:block!important;opacity:1!important;visibility:visible!important;';
+        'position:fixed!important;top:0!important;left:0!important;right:0!important;bottom:0!important;width:100vw!important;height:100vh!important;background:rgba(0,0,0,0.96)!important;background-color:rgba(0,0,0,0.96)!important;backdrop-filter:blur(60px) brightness(0.05)!important;-webkit-backdrop-filter:blur(60px) brightness(0.05)!important;z-index:2147483647!important;pointer-events:none!important;display:flex!important;align-items:center!important;justify-content:center!important;opacity:1!important;visibility:visible!important;';
+      curtain.innerHTML = `
+        <div style="text-align:center;color:#ef4444;font-family:monospace;font-size:16px;font-weight:900;letter-spacing:2px;text-transform:uppercase;padding:24px 36px;border:2px solid rgba(239,68,68,0.7);border-radius:16px;background:rgba(10,10,10,0.96);box-shadow:0 0 50px rgba(239,68,68,0.5);">
+          <div style="display:flex;align-items:center;justify-content:center;gap:8px;font-size:18px;">
+            <span>⚠️</span> <span>SCREENSHOT ATTEMPT BLOCKED</span>
+          </div>
+          <div style="font-size:12px;color:#f59e0b;font-weight:700;margin-top:10px;letter-spacing:1px;">
+            Screen blurred and shielded for tournament integrity.
+          </div>
+          <div style="font-size:11px;color:#94a3b8;font-weight:500;margin-top:6px;">
+            Click back inside the competition window to resume.
+          </div>
+        </div>
+      `;
       document.body.appendChild(curtain);
     } else {
-      curtain.style.display = 'block';
+      curtain.style.display = 'flex';
       curtain.style.opacity = '1';
       curtain.style.visibility = 'visible';
     }
@@ -127,11 +147,11 @@ export const SecurityGuard: React.FC<SecurityGuardProps> = ({
         playErrorBuzz();
       } catch {}
 
-      const currentStrikes = team?.strikes || 0;
+      const currentStrikes = teamRef.current?.strikes || 0;
       const nextStrikes = currentStrikes + 1;
-      const warningReason = `⚠️ SCREENSHOT DETECTED: Screen capture attempt (${shortcutKey}) was blocked and blacked out.`;
+      const warningReason = `⚠️ SCREENSHOT DETECTED: Screen capture attempt (${shortcutKey}) was blocked and blurred.`;
 
-      onStrikeTriggered(nextStrikes, false, warningReason, false);
+      onStrikeTriggeredRef.current(nextStrikes, false, warningReason, false);
 
       const token = localStorage.getItem('ctf_team_token');
       try {
@@ -144,15 +164,15 @@ export const SecurityGuard: React.FC<SecurityGuardProps> = ({
           body: JSON.stringify({
             key: shortcutKey,
             details,
-            teamId: team?.id,
-            teamName: team?.teamName,
+            teamId: teamRef.current?.id,
+            teamName: teamRef.current?.teamName,
           }),
         });
 
         if (res.ok) {
           const data = await res.json();
           if (typeof data.strikes === 'number') {
-            onStrikeTriggered(data.strikes, false, warningReason, false);
+            onStrikeTriggeredRef.current(data.strikes, false, warningReason, false);
           }
         }
       } catch (err) {
@@ -172,7 +192,7 @@ export const SecurityGuard: React.FC<SecurityGuardProps> = ({
       );
     };
 
-    // 1. KeyDown: Instantly black out on any screenshot attempt
+    // 1. KeyDown: Instantly black out & blur on any screenshot attempt
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isAdmin) return;
 
@@ -194,8 +214,8 @@ export const SecurityGuard: React.FC<SecurityGuardProps> = ({
         printScreenPressedTime.current = Date.now();
         lastCaptureTimeRef.current = Date.now();
         isCaptureInProgressRef.current = true;
-        triggerScreenshotBlackout(3500);
-        reportScreenshotAttempt('PrintScreen', 'PrintScreen key pressed. Viewport blacked out.');
+        triggerScreenshotBlackout(4000);
+        reportScreenshotAttempt('PrintScreen', 'PrintScreen key pressed. Screen blurred and shielded.');
         return;
       }
 
@@ -204,13 +224,14 @@ export const SecurityGuard: React.FC<SecurityGuardProps> = ({
         (e.metaKey && e.shiftKey) ||
         (e.key === 'Meta' && e.shiftKey) ||
         (e.shiftKey && (e.code === 'MetaLeft' || e.code === 'MetaRight')) ||
-        (e.metaKey && (e.code === 'ShiftLeft' || e.code === 'ShiftRight'))
+        (e.metaKey && (e.code === 'ShiftLeft' || e.code === 'ShiftRight')) ||
+        (e.key === 's' && (e.metaKey || (e.ctrlKey && e.shiftKey)))
       ) {
         metaShiftPressedTime.current = Date.now();
         lastCaptureTimeRef.current = Date.now();
         isCaptureInProgressRef.current = true;
-        triggerScreenshotBlackout(3500);
-        reportScreenshotAttempt('Win+Shift+S', 'Screen capture attempt (Win+Shift+S) blocked and blacked out.');
+        triggerScreenshotBlackout(4000);
+        reportScreenshotAttempt('Win+Shift+S', 'Screen capture attempt (Win+Shift+S) blocked and blurred.');
         return;
       }
 
@@ -221,8 +242,8 @@ export const SecurityGuard: React.FC<SecurityGuardProps> = ({
         ctrlShiftPressedTime.current = Date.now();
         lastCaptureTimeRef.current = Date.now();
         isCaptureInProgressRef.current = true;
-        triggerScreenshotBlackout(3500);
-        reportScreenshotAttempt('Ctrl+Shift+S', 'Screen capture (Ctrl+Shift+S) blocked and blacked out.');
+        triggerScreenshotBlackout(4000);
+        reportScreenshotAttempt('Ctrl+Shift+S', 'Screen capture (Ctrl+Shift+S) blocked and blurred.');
         return;
       }
 
@@ -232,8 +253,8 @@ export const SecurityGuard: React.FC<SecurityGuardProps> = ({
         e.stopPropagation();
         lastCaptureTimeRef.current = Date.now();
         isCaptureInProgressRef.current = true;
-        triggerScreenshotBlackout(3500);
-        reportScreenshotAttempt(`Cmd+Shift+${keyLower}`, 'Screen capture blocked and blacked out.');
+        triggerScreenshotBlackout(4000);
+        reportScreenshotAttempt(`Cmd+Shift+${keyLower}`, 'Screen capture blocked and blurred.');
         return;
       }
 
@@ -276,46 +297,47 @@ export const SecurityGuard: React.FC<SecurityGuardProps> = ({
         printScreenPressedTime.current = Date.now();
         lastCaptureTimeRef.current = Date.now();
         isCaptureInProgressRef.current = true;
-        triggerScreenshotBlackout(3500);
-        reportScreenshotAttempt('PrintScreen', 'PrintScreen key released. Viewport blacked out.');
+        triggerScreenshotBlackout(4000);
+        reportScreenshotAttempt('PrintScreen', 'PrintScreen key released. Screen blurred and shielded.');
       }
     };
 
-    // 3. Window Blur: If Snipping Tool, Win+Shift+S, or screen capture activates, OS blurs browser
-    // The screen must REMAIN 100% black as long as the window is blurred!
+    // 3. Window Blur: If Snipping Tool, Win+Shift+S, Lightshot, or any capture tool activates, OS blurs the browser window
+    // The screen blurs IMMEDIATELY so any captured snapshot contains only a blurred/shielded image!
     const handleBlur = () => {
       if (isAdmin) return;
-      const now = Date.now();
-      const isRecentSnip =
-        isCaptureInProgressRef.current ||
-        (metaShiftPressedTime.current > 0 && now - metaShiftPressedTime.current < 5000) ||
-        (printScreenPressedTime.current > 0 && now - printScreenPressedTime.current < 5000) ||
-        (ctrlShiftPressedTime.current > 0 && now - ctrlShiftPressedTime.current < 5000) ||
-        (lastCaptureTimeRef.current > 0 && now - lastCaptureTimeRef.current < 5000);
+      isCaptureInProgressRef.current = true;
+      triggerScreenshotBlackout(0);
+    };
 
-      if (isRecentSnip) {
+    // 4. Window Focus: Once student returns to browser, safely restore screen after short delay
+    const handleFocus = () => {
+      if (isAdmin) return;
+      setTimeout(() => {
+        isCaptureInProgressRef.current = false;
+        lastCaptureTimeRef.current = 0;
+        metaShiftPressedTime.current = 0;
+        printScreenPressedTime.current = 0;
+        ctrlShiftPressedTime.current = 0;
+        clearBlackout();
+      }, 350);
+    };
+
+    // 5. Visibility Change: When switching tabs or window minimizing
+    const handleVisibilityChange = () => {
+      if (isAdmin) return;
+      if (document.visibilityState === 'hidden') {
         isCaptureInProgressRef.current = true;
         triggerScreenshotBlackout(0);
-      }
-    };
-
-    // 4. Window Focus: Once student returns to browser, safely restore screen immediately
-    const handleFocus = () => {
-      if (isCaptureInProgressRef.current) {
+      } else {
         setTimeout(() => {
           isCaptureInProgressRef.current = false;
-          lastCaptureTimeRef.current = 0;
-          metaShiftPressedTime.current = 0;
-          printScreenPressedTime.current = 0;
-          ctrlShiftPressedTime.current = 0;
           clearBlackout();
-        }, 400);
-      } else {
-        clearBlackout();
+        }, 350);
       }
     };
 
-    // 5. Intercept Copy & Cut attempts to prevent copying challenge text (Student only)
+    // 6. Intercept Copy & Cut attempts to prevent copying challenge text (Student only)
     const handleCopy = (e: ClipboardEvent) => {
       if (isAdmin) return;
       const target = e.target as HTMLElement;
@@ -340,7 +362,7 @@ export const SecurityGuard: React.FC<SecurityGuardProps> = ({
       }
     };
 
-    // 6. Disable right click context menu on questions/challenges/artifacts (Student only)
+    // 7. Disable right click context menu on questions/challenges/artifacts (Student only)
     const handleContextMenu = (e: MouseEvent) => {
       if (isAdmin) return;
       const target = e.target as HTMLElement;
@@ -350,7 +372,7 @@ export const SecurityGuard: React.FC<SecurityGuardProps> = ({
       }
     };
 
-    // 7. Disable text dragging and selection on protected areas (Student only)
+    // 8. Prevent drag & drop or text selection on challenge elements
     const handleDragStart = (e: DragEvent) => {
       if (isAdmin) return;
       const target = e.target as HTMLElement;
@@ -373,6 +395,7 @@ export const SecurityGuard: React.FC<SecurityGuardProps> = ({
     window.addEventListener('keyup', handleKeyUp, true);
     window.addEventListener('blur', handleBlur, true);
     window.addEventListener('focus', handleFocus, true);
+    document.addEventListener('visibilitychange', handleVisibilityChange, true);
     document.addEventListener('copy', handleCopy, true);
     document.addEventListener('cut', handleCut, true);
     document.addEventListener('contextmenu', handleContextMenu, true);
@@ -384,6 +407,7 @@ export const SecurityGuard: React.FC<SecurityGuardProps> = ({
       window.removeEventListener('keyup', handleKeyUp, true);
       window.removeEventListener('blur', handleBlur, true);
       window.removeEventListener('focus', handleFocus, true);
+      document.removeEventListener('visibilitychange', handleVisibilityChange, true);
       document.removeEventListener('copy', handleCopy, true);
       document.removeEventListener('cut', handleCut, true);
       document.removeEventListener('contextmenu', handleContextMenu, true);
@@ -391,9 +415,9 @@ export const SecurityGuard: React.FC<SecurityGuardProps> = ({
       document.removeEventListener('selectstart', handleSelectStart, true);
       clearBlackout();
     };
-  }, [teamLoggedIn, isReadyToStart, isAdmin, team?.id, team?.teamName, team?.strikes, isViewingArtifact, onStrikeTriggered, triggerScreenshotBlackout, clearBlackout]);
+  }, [teamLoggedIn, isReadyToStart, isAdmin, isViewingArtifact, triggerScreenshotBlackout, clearBlackout]);
 
-  // When blackout is active during a screenshot capture, render 100% pitch-black screen (ONLY when student has started)
+  // When blackout is active during a screenshot capture, render 100% pitch-black & blurred screen (ONLY when student has started)
   if (isBlankoutActive && !isAdmin && teamLoggedIn && isReadyToStart) {
     return (
       <div
@@ -404,7 +428,9 @@ export const SecurityGuard: React.FC<SecurityGuardProps> = ({
           inset: 0,
           width: '100vw',
           height: '100vh',
-          backgroundColor: '#000000',
+          backgroundColor: 'rgba(0,0,0,0.96)',
+          backdropFilter: 'blur(60px) brightness(0.05)',
+          WebkitBackdropFilter: 'blur(60px) brightness(0.05)',
           zIndex: 2147483647,
           pointerEvents: 'none',
         }}

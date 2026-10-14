@@ -333,11 +333,21 @@ html.drm-blackout-active .drm-blackout-overlay {
   left: 0 !important;
   width: 100vw !important;
   height: 100vh !important;
-  background-color: #000000 !important;
-  background: #000000 !important;
+  background-color: rgba(0, 0, 0, 0.96) !important;
+  background: rgba(0, 0, 0, 0.96) !important;
+  backdrop-filter: blur(80px) brightness(0.05) !important;
+  -webkit-backdrop-filter: blur(80px) brightness(0.05) !important;
   z-index: 2147483647 !important;
   pointer-events: none !important;
-  display: block !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+html.drm-blackout-active #drm-global-blackout-curtain * {
   visibility: visible !important;
   opacity: 1 !important;
   filter: none !important;
