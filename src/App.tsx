@@ -692,8 +692,14 @@ export default function App() {
       }
     });
 
-    s.on('state_update', () => {
-      fetchState();
+    s.on('state_update', (data?: any) => {
+      if (data) {
+        if (data.competitionState) setCompetitionState(data.competitionState);
+        if (data.leaderboard) setLeaderboard(data.leaderboard);
+        if (data.challenges) setChallenges(data.challenges);
+      } else {
+        fetchState();
+      }
     });
 
     setSocket(s);
