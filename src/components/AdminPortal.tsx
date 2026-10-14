@@ -190,6 +190,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const [showRestartModal, setShowRestartModal] = useState(false);
   const [restartDurationMinutes, setRestartDurationMinutes] = useState(120);
   const [customRestartInput, setCustomRestartInput] = useState('');
+  const [restartClearAudit, setRestartClearAudit] = useState(true);
+  const [showClearAuditModal, setShowClearAuditModal] = useState(false);
   const [showEndCompetitionModal, setShowEndCompetitionModal] = useState(false);
 
   // Load Balancer & Redis Telemetry
@@ -353,14 +355,26 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       playCyberBlip(920);
     };
 
+    const handleAuditLogsCleared = () => {
+      setAuditLogs([]);
+    };
+
+    const handleCompetitionReset = () => {
+      setAuditLogs([]);
+      setLogs((prev) => ({ ...prev, securityLogs: [] }));
+      fetchAdminData();
+    };
+
     socket.on('admin:team_registered', handleTeamReg);
     socket.on('admin:team_updated', handleTeamUpd);
     socket.on('admin:screenshot_alert', handleScreenshotAlert);
     socket.on('admin:feedback_received', handleFeedbackReceived);
     socket.on('activity_event', handleActivityEvent);
     socket.on('audit:new_log', handleNewAuditLog);
+    socket.on('audit_logs_cleared', handleAuditLogsCleared);
     socket.on('security_alert', handleSecurityAlert);
     socket.on('security_logs_cleared', handleLogsCleared);
+    socket.on('competition_reset', handleCompetitionReset);
     return () => {
       socket.off('admin:team_registered', handleTeamReg);
       socket.off('admin:team_updated', handleTeamUpd);
@@ -368,8 +382,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       socket.off('admin:feedback_received', handleFeedbackReceived);
       socket.off('activity_event', handleActivityEvent);
       socket.off('audit:new_log', handleNewAuditLog);
+      socket.off('audit_logs_cleared', handleAuditLogsCleared);
       socket.off('security_alert', handleSecurityAlert);
       socket.off('security_logs_cleared', handleLogsCleared);
+      socket.off('competition_reset', handleCompetitionReset);
     };
   }, [socket]);
 
@@ -437,7 +453,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   // Timer Handlers - Full Authority
   const handleTimerAction = async (
     action: 'start' | 'pause' | 'stop' | 'restart' | 'reset' | 'set' | 'add' | 'subtract' | 'end',
-    seconds?: number
+    seconds?: number,
+    clearAuditLogs?: boolean
   ) => {
     playCyberBlip(800);
     try {
@@ -447,7 +464,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
           'Content-Type': 'application/json',
           'x-admin-token': adminToken,
         },
-        body: JSON.stringify({ action, seconds }),
+        body: JSON.stringify({ action, seconds, clearAuditLogs }),
       });
       if (res.ok) {
         playSuccessChime();
@@ -456,6 +473,10 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         } else if (action === 'pause' || action === 'stop') {
           setNotification({ type: 'info', text: 'Countdown stopped / paused. Submissions frozen across all screens.' });
         } else if (action === 'restart') {
+          if (clearAuditLogs) {
+            setAuditLogs([]);
+            setLogs((prev) => ({ ...prev, securityLogs: [] }));
+          }
           setNotification({
             type: 'success',
             text: `Countdown restarted successfully with ${Math.round((seconds || 7200) / 60)} minutes. Submissions live!`,
@@ -526,7 +547,29 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       }
     }
     setShowRestartModal(false);
-    handleTimerAction('restart', mins * 60);
+    handleTimerAction('restart', mins * 60, restartClearAudit);
+  };
+
+  // Clear Audit Trail Logs
+  const handleConfirmClearAuditLogs = async () => {
+    setShowClearAuditModal(false);
+    playErrorBuzz();
+    try {
+      const res = await fetch('/api/admin/audit-logs/clear', {
+        method: 'POST',
+        headers: { 'x-admin-token': adminToken },
+      });
+      if (res.ok) {
+        setAuditLogs([]);
+        playSuccessChime();
+        setNotification({ type: 'success', text: 'All system audit trail records have been permanently cleared.' });
+        fetchAdminData();
+      } else {
+        throw new Error('Failed to clear audit logs');
+      }
+    } catch {
+      setNotification({ type: 'error', text: 'Failed to purge audit trail logs.' });
+    }
   };
 
   // Broadcast Announcement
@@ -601,6 +644,8 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       method: 'POST',
       headers: { 'x-admin-token': adminToken },
     });
+    setAuditLogs([]);
+    setLogs((prev) => ({ ...prev, securityLogs: [] }));
     playSuccessChime();
     setNotification({ type: 'success', text: 'Competition state successfully reset.' });
     onRefreshState();
@@ -3293,6 +3338,14 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   <span>EXPORT AUDIT CSV</span>
                 </button>
                 <button
+                  onClick={() => setShowClearAuditModal(true)}
+                  className="px-3 py-1.5 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/40 text-xs font-mono font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-[0_0_12px_rgba(244,63,94,0.15)]"
+                  title="Purge all system audit trail records"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>PURGE AUDIT TRAIL</span>
+                </button>
+                <button
                   onClick={fetchAdminData}
                   className="p-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
                   title="Refresh Audit Trail"
@@ -4449,6 +4502,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                   />
                 )}
               </div>
+              {/* Reset Logs Checkbox */}
+              <label className="flex items-center gap-2 pt-2 text-xs text-slate-300 font-sans cursor-pointer select-none border-t border-slate-800">
+                <input
+                  type="checkbox"
+                  checked={restartClearAudit}
+                  onChange={(e) => setRestartClearAudit(e.target.checked)}
+                  className="rounded border-slate-700 bg-slate-900 text-cyan-500 focus:ring-cyan-500 focus:ring-offset-0 cursor-pointer"
+                />
+                <span>Reset audit trail and security telemetry for this fresh competition run</span>
+              </label>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
@@ -4466,6 +4529,41 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>CONFIRM & RESTART NOW</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal: Purge System Audit Trail Logs */}
+      {showClearAuditModal && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+          <div className="bg-[#0d111a] border-2 border-rose-500/60 rounded-xl p-6 max-w-md w-full font-mono text-xs shadow-2xl space-y-3">
+            <div className="flex items-center gap-2 text-rose-400 font-bold text-sm">
+              <AlertTriangle className="w-5 h-5 text-rose-400 animate-pulse" />
+              <span>PURGE SYSTEM-WIDE AUDIT TRAIL</span>
+            </div>
+            <p className="text-slate-300 text-xs leading-relaxed">
+              WARNING: This action will permanently erase all <strong className="text-white">{auditLogs.length}</strong> timestamped audit logs across SQLite, memory, and cloud database.
+            </p>
+            <div className="bg-rose-950/20 border border-rose-500/30 rounded p-2.5 text-[11px] text-rose-300">
+              All participant registrations, logins, flag submissions, hint unlocks, and administrator commands will be purged from historical audit records.
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowClearAuditModal(false)}
+                className="px-3 py-1.5 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmClearAuditLogs}
+                className="px-4 py-1.5 rounded bg-rose-600 hover:bg-rose-500 text-white font-bold transition-colors cursor-pointer shadow-[0_0_12px_rgba(244,63,94,0.4)] flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Confirm Purge Audit Trail</span>
               </button>
             </div>
           </div>

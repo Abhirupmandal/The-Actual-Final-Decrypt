@@ -2413,7 +2413,7 @@ app.post('/api/post-event/viewed', (req: Request, res: Response) => {
 // ======================== ADMIN ENDPOINTS ========================
 
 // Timer Controls - Full Admin Authority (Start, Stop/Pause, Restart, Set, Adjust)
-app.post('/api/admin/timer', requireAdminAuth, (req: Request, res: Response) => {
+app.post('/api/admin/timer', requireAdminAuth, async (req: Request, res: Response) => {
   const { action, seconds } = req.body;
   const ip = getClientIp(req);
 
@@ -2494,6 +2494,32 @@ app.post('/api/admin/timer', requireAdminAuth, (req: Request, res: Response) => 
       ip
     );
   } else if (action === 'restart') {
+    if (req.body.clearAuditLogs !== false) {
+      auditLogStore.clearAll();
+      securityLogs.length = 0;
+      securityLogStore.clearAll();
+
+      try {
+        const seedPath = path.join(process.cwd(), 'data', 'baseline_seed.json');
+        if (fs.existsSync(seedPath)) {
+          const seed = JSON.parse(fs.readFileSync(seedPath, 'utf-8'));
+          seed.audit_logs = [];
+          seed.security_logs = [];
+          fs.writeFileSync(seedPath, JSON.stringify(seed, null, 2), 'utf-8');
+        }
+      } catch (err) {
+        console.error('[Restart Timer] Error clearing seed logs:', err);
+      }
+
+      if (postgresSync.isEnabled()) {
+        await postgresSync.clearAuditLogs();
+        await postgresSync.clearSecurityLogs();
+      }
+
+      io.emit('audit_logs_cleared');
+      io.emit('security_logs_cleared');
+    }
+
     const restartSec = typeof seconds === 'number' && seconds > 0 ? Math.floor(seconds) : (competitionState.durationSeconds || 7200);
     competitionState.status = 'running';
     competitionState.remainingSeconds = restartSec;
@@ -2752,16 +2778,21 @@ app.post('/api/admin/reset', requireAdminAuth, async (req: Request, res: Respons
   lastLeaderboardCalc = 0;
   teamStore.clearAll();
 
-  // Clear baseline seed teams so test names do not resurrect on reboot
+  // Clear baseline seed so test data does not resurrect on reboot
   try {
     const seedPath = path.join(process.cwd(), 'data', 'baseline_seed.json');
     if (fs.existsSync(seedPath)) {
       const seed = JSON.parse(fs.readFileSync(seedPath, 'utf-8'));
       seed.teams = [];
+      seed.audit_logs = [];
+      seed.security_logs = [];
+      seed.activity_feed = [];
+      seed.submissions = [];
+      seed.competition_config = [];
       fs.writeFileSync(seedPath, JSON.stringify(seed, null, 2), 'utf-8');
     }
   } catch (err) {
-    console.error('[Reset] Error clearing seed teams:', err);
+    console.error('[Reset] Error clearing seed data:', err);
   }
 
   // Also wipe remote Supabase PostgreSQL tables so testing teams do not persist or resurrect
@@ -2808,6 +2839,8 @@ app.post('/api/admin/reset', requireAdminAuth, async (req: Request, res: Respons
   // 9. Invalidate Redis caches and notify all connected clients
   await redisCache.invalidate('cache:');
   io.emit('competition_reset');
+  io.emit('audit_logs_cleared');
+  io.emit('security_logs_cleared');
   io.emit('leaderboard_update', []);
   io.emit('activity_event', {
     id: 'act-' + crypto.randomUUID(),
@@ -3302,12 +3335,74 @@ app.get('/api/admin/logs', requireAdminAuth, (_req: Request, res: Response) => {
 });
 
 // Admin Purge Security Incident Logs
-app.post('/api/admin/logs/clear', requireAdminAuth, (req: Request, res: Response) => {
+app.post('/api/admin/logs/clear', requireAdminAuth, async (req: Request, res: Response) => {
   securityLogs.length = 0;
   securityLogStore.clearAll();
+
+  // Wipe from baseline_seed.json so it doesn't resurrect on boot
+  try {
+    const seedPath = path.join(process.cwd(), 'data', 'baseline_seed.json');
+    if (fs.existsSync(seedPath)) {
+      const seed = JSON.parse(fs.readFileSync(seedPath, 'utf-8'));
+      seed.security_logs = [];
+      fs.writeFileSync(seedPath, JSON.stringify(seed, null, 2), 'utf-8');
+    }
+  } catch (err) {
+    console.error('[Logs Clear] Error clearing seed security logs:', err);
+  }
+
+  if (postgresSync.isEnabled()) {
+    await postgresSync.clearSecurityLogs();
+  }
+
   recordAuditLog('ADMIN', 'ADMIN_CONSOLE', 'SYSTEM_INFO', { action: 'Security incident logs purged by admin' }, getClientIp(req));
   io.emit('security_logs_cleared');
-  res.json({ success: true, message: 'Security incident logs successfully cleared.' });
+  res.json({ success: true, message: 'Security incident logs successfully cleared from memory, SQLite, and cloud database.' });
+});
+
+// Admin Purge System-Wide Audit Trail Logs
+app.post(['/api/admin/audit-logs/clear', '/api/admin/audit-trail/clear'], requireAdminAuth, async (_req: Request, res: Response) => {
+  auditLogStore.clearAll();
+
+  try {
+    const seedPath = path.join(process.cwd(), 'data', 'baseline_seed.json');
+    if (fs.existsSync(seedPath)) {
+      const seed = JSON.parse(fs.readFileSync(seedPath, 'utf-8'));
+      seed.audit_logs = [];
+      fs.writeFileSync(seedPath, JSON.stringify(seed, null, 2), 'utf-8');
+    }
+  } catch (err) {
+    console.error('[Audit Logs Clear] Error updating baseline seed:', err);
+  }
+
+  if (postgresSync.isEnabled()) {
+    await postgresSync.clearAuditLogs();
+  }
+
+  io.emit('audit_logs_cleared');
+  res.json({ success: true, message: 'All system audit trail records have been completely purged from memory, SQLite, and cloud database.' });
+});
+
+app.delete('/api/admin/audit-logs', requireAdminAuth, async (_req: Request, res: Response) => {
+  auditLogStore.clearAll();
+
+  try {
+    const seedPath = path.join(process.cwd(), 'data', 'baseline_seed.json');
+    if (fs.existsSync(seedPath)) {
+      const seed = JSON.parse(fs.readFileSync(seedPath, 'utf-8'));
+      seed.audit_logs = [];
+      fs.writeFileSync(seedPath, JSON.stringify(seed, null, 2), 'utf-8');
+    }
+  } catch (err) {
+    console.error('[Audit Logs Clear] Error updating baseline seed:', err);
+  }
+
+  if (postgresSync.isEnabled()) {
+    await postgresSync.clearAuditLogs();
+  }
+
+  io.emit('audit_logs_cleared');
+  res.json({ success: true, message: 'All system audit trail records have been completely purged from memory, SQLite, and cloud database.' });
 });
 
 // Admin Dedicated Timestamped Audit Logs API

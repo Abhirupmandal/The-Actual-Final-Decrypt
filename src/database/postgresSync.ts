@@ -654,39 +654,65 @@ class PostgresSyncManager {
   }
 
   public async clearScreenshotAlerts(): Promise<void> {
-    if (!this.pool || !this.isConnected) return;
+    if (!this.pool) return;
     try {
       await this.pool.query('DELETE FROM screenshot_alerts');
+      console.log('[PostgreSQL] Cleared screenshot_alerts in Supabase.');
     } catch (err) {
       console.error('[PostgreSQL] Error clearing screenshot alerts:', err);
     }
   }
 
   public async clearSecurityLogs(): Promise<void> {
-    if (!this.pool || !this.isConnected) return;
+    if (!this.pool) return;
     try {
       await this.pool.query('DELETE FROM security_logs');
+      console.log('[PostgreSQL] Cleared security_logs in Supabase.');
     } catch (err) {
       console.error('[PostgreSQL] Error clearing security logs:', err);
     }
   }
 
-  public async wipeAll(): Promise<void> {
-    if (!this.pool || !this.isConnected) return;
+  public async clearAuditLogs(): Promise<void> {
+    if (!this.pool) return;
     try {
-      await this.pool.query(`
-        DELETE FROM submissions;
-        DELETE FROM activity_feed;
-        DELETE FROM screenshot_alerts;
-        DELETE FROM security_logs;
-        DELETE FROM audit_logs;
-        DELETE FROM user_feedbacks;
-        DELETE FROM teams;
-      `);
-      console.log('[PostgreSQL] Successfully wiped all runtime tables in Supabase.');
+      await this.pool.query('DELETE FROM audit_logs');
+      console.log('[PostgreSQL] Cleared audit_logs in Supabase.');
     } catch (err) {
-      console.error('[PostgreSQL] Error wiping tables in Supabase:', err);
+      console.error('[PostgreSQL] Error clearing audit logs:', err);
     }
+  }
+
+  public async clearActivityFeed(): Promise<void> {
+    if (!this.pool) return;
+    try {
+      await this.pool.query('DELETE FROM activity_feed');
+      console.log('[PostgreSQL] Cleared activity_feed in Supabase.');
+    } catch (err) {
+      console.error('[PostgreSQL] Error clearing activity feed:', err);
+    }
+  }
+
+  public async wipeAll(): Promise<void> {
+    if (!this.pool) return;
+    const tables = [
+      'submissions',
+      'activity_feed',
+      'screenshot_alerts',
+      'security_logs',
+      'audit_logs',
+      'user_feedbacks',
+      'feedback',
+      'teams',
+    ];
+    for (const table of tables) {
+      try {
+        await this.pool.query(`DELETE FROM ${table}`);
+      } catch (err: any) {
+        console.warn(`[PostgreSQL wipeAll] Note for table ${table}:`, err?.message || err);
+      }
+    }
+    console.log('[PostgreSQL] Successfully wiped all runtime tables in Supabase.');
   }
 
   public async loadCompetitionConfig(): Promise<CompetitionState | null> {
