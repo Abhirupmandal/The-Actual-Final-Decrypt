@@ -122,7 +122,7 @@ function FeedbackLockedCard({
       <div className="space-y-2">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-bold uppercase tracking-widest">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
-          <span>COMPETITION IN PROGRESS // ACCESS RESTRICTED</span>
+          <span>COMPETITION IN PROGRESS - ACCESS RESTRICTED</span>
         </div>
         <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight">
           FEEDBACK FORM LOCKED
@@ -897,7 +897,7 @@ export default function App() {
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
             <div className="flex items-center gap-2 text-amber-400 mb-1">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-              <span className="font-bold tracking-wider">RESTRICTED ZONE // SECRET ACCESS GATEWAY</span>
+              <span className="font-bold tracking-wider">RESTRICTED ZONE: SECRET ACCESS GATEWAY</span>
             </div>
             <h2 className="text-xl font-black text-white mb-2">MASTER ADMIN AUTHENTICATION</h2>
             <p className="text-slate-400 font-sans text-xs mb-6">
@@ -997,7 +997,7 @@ export default function App() {
                     <Lock className="w-7 h-7" />
                   </div>
                   <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-wider">
-                    FINAL LEADERBOARD LOCKED // FEEDBACK REQUIRED
+                    FINAL LEADERBOARD LOCKED: FEEDBACK REQUIRED
                   </h2>
                   <p className="text-xs sm:text-sm text-slate-300 font-sans max-w-lg mx-auto leading-relaxed">
                     The competition has officially concluded! To access the official final scoreboard and challenge writeups, all participants must submit the mandatory post-event feedback debrief.
@@ -1057,7 +1057,7 @@ export default function App() {
             {currentTab === 'activity' && (
               !team && !adminToken ? (
                 <GuestRestrictedTabCard
-                  title="LIVE FEED // SQUAD LOGIN REQUIRED"
+                  title="LIVE FEED: SQUAD LOGIN REQUIRED"
                   description="Real-time decrypt alerts, activity feeds, and tournament solve streams are exclusive to registered participating squads and competition arbitrators."
                   onOpenAuthModal={() => setIsAuthModalOpen(true)}
                   onNavigateToRules={() => setCurrentTab('rules')}
@@ -1076,7 +1076,7 @@ export default function App() {
                 />
               ) : !team && !adminToken ? (
                 <GuestRestrictedTabCard
-                  title="FEEDBACK PORTAL // SQUAD LOGIN REQUIRED"
+                  title="FEEDBACK PORTAL: SQUAD LOGIN REQUIRED"
                   description="Competition feedback evaluations are linked to registered participating squads. Please register your squad or sign in to share your tournament experience."
                   onOpenAuthModal={() => setIsAuthModalOpen(true)}
                   onNavigateToRules={() => setCurrentTab('rules')}
@@ -1096,7 +1096,7 @@ export default function App() {
             {currentTab === 'profile' && (
               !team && !adminToken ? (
                 <GuestRestrictedTabCard
-                  title="SQUAD PROFILE // SQUAD LOGIN REQUIRED"
+                  title="SQUAD PROFILE: SQUAD LOGIN REQUIRED"
                   description="Please sign in or register your competing team to access your squad stats, decrypted flags, and token settings."
                   onOpenAuthModal={() => setIsAuthModalOpen(true)}
                   onNavigateToRules={() => setCurrentTab('rules')}

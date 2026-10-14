@@ -66,9 +66,9 @@ export const CompetitionEndedDashboard: React.FC<CompetitionEndedDashboardProps>
   );
 
   const getRankBadgeInfo = (rank: number) => {
-    if (rank === 1) return { label: '👑 ARENA GRAND CHAMPION // 1ST PLACE', color: 'text-amber-300 border-amber-400 bg-amber-500/20' };
-    if (rank === 2) return { label: '🥈 SILVER MEDALIST // 2ND PLACE', color: 'text-slate-200 border-slate-300 bg-slate-400/20' };
-    if (rank === 3) return { label: '🥉 BRONZE MEDALIST // 3RD PLACE', color: 'text-amber-600 border-amber-600 bg-amber-700/20' };
+    if (rank === 1) return { label: '👑 ARENA GRAND CHAMPION - 1ST PLACE', color: 'text-amber-300 border-amber-400 bg-amber-500/20' };
+    if (rank === 2) return { label: '🥈 SILVER MEDALIST - 2ND PLACE', color: 'text-slate-200 border-slate-300 bg-slate-400/20' };
+    if (rank === 3) return { label: '🥉 BRONZE MEDALIST - 3RD PLACE', color: 'text-amber-600 border-amber-600 bg-amber-700/20' };
     if (rank <= 10) return { label: '⭐ TOP 10 ELITE DECRYPTOR SQUAD', color: 'text-cyan-300 border-cyan-400 bg-cyan-500/20' };
     return { label: '🛡️ CERTIFIED TOURNAMENT OPERATOR', color: 'text-emerald-400 border-emerald-500/50 bg-emerald-500/20' };
   };
@@ -139,7 +139,7 @@ export const CompetitionEndedDashboard: React.FC<CompetitionEndedDashboardProps>
           {/* Status Badge with Glowing Pulse */}
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/50 text-amber-300 text-xs font-bold uppercase tracking-widest shadow-[0_0_20px_rgba(245,158,11,0.3)] animate-pulse">
             <Trophy className="w-4 h-4 text-amber-400" />
-            <span>OFFICIAL TOURNAMENT CONCLUSION // ALL SUBMISSIONS LOCKED</span>
+            <span>OFFICIAL TOURNAMENT CONCLUSION: ALL SUBMISSIONS LOCKED</span>
           </div>
 
           <h1 className="text-3xl sm:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white via-amber-200 to-amber-500 tracking-tight uppercase drop-shadow-[0_0_35px_rgba(245,158,11,0.4)]">
@@ -256,7 +256,7 @@ export const CompetitionEndedDashboard: React.FC<CompetitionEndedDashboardProps>
           <div className="flex items-center gap-2">
             <Trophy className="w-5 h-5 text-amber-400" />
             <h2 className="text-lg sm:text-xl font-black text-white uppercase tracking-wider">
-              TOURNAMENT PODIUM // TOP 3 CHAMPIONS
+              TOURNAMENT PODIUM: TOP 3 CHAMPIONS
             </h2>
           </div>
           <span className="text-xs text-amber-400/90 font-bold uppercase tracking-wider bg-amber-500/10 px-3 py-1 rounded-full border border-amber-500/30">

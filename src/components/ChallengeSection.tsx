@@ -127,7 +127,7 @@ export const ChallengeSection: React.FC<ChallengeSectionProps> = ({
             <div className="flex items-center gap-2 text-xs font-mono text-[#00ff66] font-bold">
               <span className="w-2 h-2 rounded-full bg-[#00ff66] animate-ping" />
               <Layers className="w-4 h-4" />
-              <span>DEFENSE INTELLIGENCE HUD // ACTIVE SECTOR MATRIX</span>
+              <span>DEFENSE INTELLIGENCE HUD: ACTIVE SECTOR MATRIX</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-black font-mono text-white mt-1.5 tracking-wide flex items-center gap-2">
               <span>CHALLENGE MARKETPLACE</span>

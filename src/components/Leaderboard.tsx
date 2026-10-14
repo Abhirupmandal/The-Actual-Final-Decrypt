@@ -160,7 +160,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
           <div>
             <div className="flex items-center gap-2 text-xs font-mono text-[#00ff66] font-bold">
               <Trophy className="w-4 h-4" />
-              <span>DEFENSE INTELLIGENCE // LIVE OPERATOR STANDINGS</span>
+              <span>DEFENSE INTELLIGENCE: LIVE OPERATOR STANDINGS</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-black font-mono text-white mt-1.5 tracking-wide flex items-center gap-2">
               <span>SCOREBOARD & RANKINGS</span>
@@ -271,7 +271,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
             <thead>
               <tr className="bg-[#080b12] border-b border-slate-800 text-slate-400">
                 <th className="py-3.5 px-4 w-20 text-center font-bold">RANK</th>
-                <th className="py-3.5 px-4 font-bold">TEAM // OPERATOR CREW</th>
+                <th className="py-3.5 px-4 font-bold">TEAM &amp; OPERATOR CREW</th>
                 <th className="py-3.5 px-4 text-center font-bold">SOLVES</th>
                 <th className="py-3.5 px-4 text-center font-bold">INCORRECT</th>
                 <th className="py-3.5 px-4 text-center font-bold">LAST SOLVE (UTC)</th>

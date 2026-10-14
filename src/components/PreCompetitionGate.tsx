@@ -118,7 +118,7 @@ export const PreCompetitionGate: React.FC<PreCompetitionGateProps> = ({
                 isTimerRunning ? 'text-[#00ff66]' : 'text-amber-400'
               }`}>
                 <span className={`w-2 h-2 rounded-full animate-ping ${isTimerRunning ? 'bg-[#00ff66]' : 'bg-amber-400'}`} />
-                <span>{isTimerRunning ? 'TOURNAMENT LIVE // RULES' : 'TOURNAMENT STANDBY // WAITING FOR ADMIN'}</span>
+                <span>{isTimerRunning ? 'TOURNAMENT LIVE - RULES' : 'TOURNAMENT STANDBY - WAITING FOR ADMIN'}</span>
               </div>
               <h2 className="text-xl sm:text-2xl font-black text-white tracking-wide">
                 PLEASE READ THE RULES BEFORE BEGINNING
@@ -270,7 +270,7 @@ export const PreCompetitionGate: React.FC<PreCompetitionGateProps> = ({
               </div>
               <div className="space-y-1 min-w-0">
                 <div className="font-mono font-black text-amber-400 uppercase tracking-wider flex items-center gap-2 text-xs sm:text-sm">
-                  <span>TOURNAMENT STANDBY // WAITING FOR ADMIN TIMER</span>
+                  <span>TOURNAMENT STANDBY: WAITING FOR ADMIN TIMER</span>
                   <span className="text-[10px] bg-amber-500/25 px-2 py-0.5 rounded border border-amber-500/40 text-amber-300">
                     STATUS: HELD
                   </span>

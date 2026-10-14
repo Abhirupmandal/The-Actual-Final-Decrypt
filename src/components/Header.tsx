@@ -424,7 +424,7 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Primary Navigation Links with 44px+ Touch Targets */}
             <div className="space-y-1.5">
               <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider px-1 pb-1 flex items-center justify-between">
-                <span>NAVIGATION // SELECT SECTOR</span>
+                <span>NAVIGATION: SELECT SECTOR</span>
                 <span className="text-[#00ff41] text-[9px]">[ROUND 2]</span>
               </div>
               {navTabs.map((tab) => {

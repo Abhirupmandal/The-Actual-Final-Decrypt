@@ -146,7 +146,7 @@ export const RocketLaunchModal: React.FC<RocketLaunchModalProps> = ({
         <div className="flex items-center gap-3">
           <div className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
           <span className="text-xs font-black tracking-widest text-amber-400 uppercase">
-            MISSION CONTROL // EVENT FINALIZATION PROTOCOL
+            MISSION CONTROL: EVENT FINALIZATION PROTOCOL
           </span>
         </div>
 
@@ -307,7 +307,7 @@ export const RocketLaunchModal: React.FC<RocketLaunchModalProps> = ({
 
             <div className="space-y-2">
               <span className="text-xs font-black tracking-widest text-cyan-400 uppercase">
-                ORBIT ACHIEVED // FINAL RESULTS TELEMETRY LOCKED
+                ORBIT ACHIEVED: FINAL RESULTS TELEMETRY LOCKED
               </span>
               <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight uppercase drop-shadow-[0_0_30px_rgba(255,255,255,0.4)]">
                 CHAMPIONS COMPUTED
@@ -328,10 +328,10 @@ export const RocketLaunchModal: React.FC<RocketLaunchModalProps> = ({
             <span className="text-slate-400">TELEMETRY:</span>
             <span className="text-emerald-400 font-bold">
               {stage === 'countdown'
-                ? 'STANDBY // COUNTDOWN ACTIVE'
+                ? 'STANDBY: COUNTDOWN ACTIVE'
                 : stage === 'launching'
-                ? 'THRUSTERS 100% // ASCENT IN PROGRESS'
-                : 'ORBITAL LOCK // COMPUTATION COMPLETE'}
+                ? 'THRUSTERS 100%: ASCENT IN PROGRESS'
+                : 'ORBITAL LOCK: COMPUTATION COMPLETE'}
             </span>
           </div>
 

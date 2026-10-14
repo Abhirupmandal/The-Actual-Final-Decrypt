@@ -80,7 +80,7 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ events }) => {
             <div className="flex items-center gap-2 text-xs font-mono text-[#a855f7] font-bold">
               <span className="w-2 h-2 rounded-full bg-[#a855f7] animate-ping" />
               <Radio className="w-4 h-4" />
-              <span>DEFENSE INTELLIGENCE // LIVE TRANSMISSION TELEMETRY</span>
+              <span>DEFENSE INTELLIGENCE: LIVE TRANSMISSION TELEMETRY</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-black font-mono text-white mt-1.5 tracking-wide flex items-center gap-2">
               <span>LIVE ACTIVITY FEED</span>
@@ -126,7 +126,7 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ events }) => {
           </div>
           <div className="text-[11px] text-[#00ff66] flex items-center gap-1.5 font-bold">
             <span className="w-2 h-2 rounded-full bg-[#00ff66] animate-pulse" />
-            <span>SOCKET.IO // ACTIVE</span>
+            <span>SOCKET.IO: ACTIVE</span>
           </div>
         </div>
 

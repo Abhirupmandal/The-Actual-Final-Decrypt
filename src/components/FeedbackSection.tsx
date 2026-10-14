@@ -199,7 +199,7 @@ export const FeedbackSection: React.FC<FeedbackSectionProps> = ({
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-amber-950/90 via-[#181105] to-amber-950/90 border-2 border-amber-500/80 p-5 sm:p-6 text-center space-y-3 shadow-[0_0_40px_rgba(245,158,11,0.3)] animate-pulse">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/50 text-[11px] font-bold uppercase tracking-wider">
             <Lock className="w-3.5 h-3.5 text-amber-400" />
-            <span>MANDATORY POST-EVENT DEBRIEF // UNLOCK GATEWAY</span>
+            <span>MANDATORY POST-EVENT DEBRIEF: UNLOCK GATEWAY</span>
           </div>
           <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight">
             COMPLETE FEEDBACK TO UNLOCK FINAL LEADERBOARD

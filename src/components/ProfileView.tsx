@@ -57,7 +57,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
 
           <div className="text-[11px] text-[#00ff66] uppercase font-bold tracking-widest mb-1">
-            [ACCESS RESTRICTED // CLEARANCE REQUIRED]
+            [ACCESS RESTRICTED: CLEARANCE REQUIRED]
           </div>
           <h2 className="text-2xl sm:text-3xl font-black text-white tracking-wide">
             OPERATOR DOSSIER LOCKED

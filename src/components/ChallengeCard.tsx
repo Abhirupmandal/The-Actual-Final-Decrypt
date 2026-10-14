@@ -511,7 +511,7 @@ export const ChallengeCard: React.FC<ChallengeCardProps> = ({
         ) : isLockedOrEnded ? (
           <div className="w-full min-h-[46px] py-3 px-4 rounded-xl bg-slate-900/90 border border-slate-700/80 text-slate-400 font-mono text-xs font-black tracking-wider flex items-center justify-center gap-2 shadow-inner">
             <Lock className="w-4 h-4 text-slate-500" />
-            <span>[PORTAL LOCKED // TIME EXPIRED]</span>
+            <span>[PORTAL LOCKED: TIME EXPIRED]</span>
           </div>
         ) : (
           <form onSubmit={handleFlagSubmit} className="flex gap-2">

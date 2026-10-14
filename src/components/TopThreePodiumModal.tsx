@@ -128,7 +128,7 @@ export const TopThreePodiumModal: React.FC<TopThreePodiumModalProps> = ({
         {/* Badge */}
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-bold uppercase tracking-widest mb-3 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
           <Sparkles className="w-4 h-4 text-amber-400 animate-spin" />
-          <span>VICTORY CEREMONY // TOURNAMENT COMPLETE</span>
+          <span>VICTORY CEREMONY: TOURNAMENT COMPLETE</span>
         </div>
 
         <h2 className="text-2xl sm:text-4xl font-black text-white tracking-tight mb-2 uppercase drop-shadow-md">
