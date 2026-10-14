@@ -103,6 +103,60 @@ function GuestRestrictedTabCard({
   );
 }
 
+function FeedbackLockedCard({
+  onNavigateToChallenges,
+  onNavigateToLeaderboard,
+}: {
+  onNavigateToChallenges: () => void;
+  onNavigateToLeaderboard: () => void;
+}) {
+  return (
+    <div className="max-w-xl mx-auto my-12 p-6 sm:p-10 rounded-3xl bg-[#080e18]/90 border border-amber-500/40 text-center font-mono space-y-5 shadow-[0_0_50px_rgba(245,158,11,0.15)] animate-fadeIn relative overflow-hidden backdrop-blur-xl">
+      <div className="absolute top-0 left-1/4 right-1/4 h-1 bg-gradient-to-r from-transparent via-amber-400 to-transparent shadow-[0_0_20px_#f59e0b]" />
+
+      <div className="w-16 h-16 mx-auto rounded-2xl bg-amber-500/10 border border-amber-500/40 flex items-center justify-center text-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.25)]">
+        <Lock className="w-8 h-8" />
+      </div>
+
+      <div className="space-y-2">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[10px] font-bold uppercase tracking-widest">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+          <span>COMPETITION IN PROGRESS // ACCESS RESTRICTED</span>
+        </div>
+        <h2 className="text-xl sm:text-2xl font-black text-white uppercase tracking-tight">
+          FEEDBACK FORM LOCKED
+        </h2>
+        <p className="text-xs sm:text-sm text-slate-300 font-sans max-w-md mx-auto leading-relaxed">
+          The feedback evaluation form is locked during live competition hours. It will automatically unlock for all participating squads once the event is complete and the admin concludes the tournament.
+        </p>
+      </div>
+
+      <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+        <button
+          onClick={() => {
+            playCyberBlip(800);
+            onNavigateToChallenges();
+          }}
+          className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#00ff41] hover:bg-[#00ff41]/90 text-black font-black uppercase text-xs tracking-wider shadow-[0_0_25px_rgba(0,255,65,0.4)] transition-all cursor-pointer inline-flex items-center justify-center gap-2"
+        >
+          <span>RETURN TO CHALLENGES</span>
+        </button>
+
+        <button
+          onClick={() => {
+            playCyberBlip(750);
+            onNavigateToLeaderboard();
+          }}
+          className="w-full sm:w-auto px-5 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-700 font-bold uppercase text-xs tracking-wider transition-all cursor-pointer inline-flex items-center justify-center gap-2"
+        >
+          <Trophy className="w-4 h-4 text-amber-400" />
+          <span>LEADERBOARD</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -1002,7 +1056,12 @@ export default function App() {
             )}
 
             {currentTab === 'feedback' && (
-              !team && !adminToken ? (
+              competitionState.status !== 'ended' && !adminToken ? (
+                <FeedbackLockedCard
+                  onNavigateToChallenges={() => setCurrentTab('challenges')}
+                  onNavigateToLeaderboard={() => setCurrentTab('leaderboard')}
+                />
+              ) : !team && !adminToken ? (
                 <GuestRestrictedTabCard
                   title="FEEDBACK PORTAL // SQUAD LOGIN REQUIRED"
                   description="Competition feedback evaluations are linked to registered participating squads. Please register your squad or sign in to share your tournament experience."

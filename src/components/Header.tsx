@@ -76,10 +76,18 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   const isGuest = !team && !isAdminAuthenticated;
+  const isEventEnded = competitionState.status === 'ended';
+  const isFeedbackLocked = !isEventEnded && !isAdminAuthenticated;
+
   const isTabLocked = (tabId: AppTab) => isGuest && (tabId === 'activity' || tabId === 'feedback' || tabId === 'profile');
 
   const handleTabClick = (tab: AppTab) => {
     playCyberBlip(750);
+    if (tab === 'feedback' && isFeedbackLocked) {
+      setCurrentTab('feedback');
+      setMobileMenuOpen(false);
+      return;
+    }
     if (isTabLocked(tab)) {
       setMobileMenuOpen(false);
       onOpenAuthModal();
@@ -190,24 +198,33 @@ export const Header: React.FC<HeaderProps> = ({
               {navTabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = currentTab === tab.id;
-                const locked = isTabLocked(tab.id);
+                const isPostEventLocked = tab.id === 'feedback' && isFeedbackLocked;
+                const locked = isTabLocked(tab.id) || isPostEventLocked;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => handleTabClick(tab.id)}
-                    title={locked ? `${tab.label} (Sign in / register to unlock)` : undefined}
+                    title={
+                      isPostEventLocked
+                        ? 'Feedback portal unlocks after the competition has completed and finished by admin'
+                        : locked
+                        ? `${tab.label} (Sign in / register to unlock)`
+                        : undefined
+                    }
                     className={`px-2 2xl:px-2.5 py-1.5 rounded-lg font-mono text-[11px] 2xl:text-xs font-bold transition-all duration-200 flex items-center gap-1 2xl:gap-1.5 cursor-pointer whitespace-nowrap ${
                       isActive
                         ? 'text-[#00ff41] bg-[#00ff41]/15 border border-[#00ff41]/60 shadow-[0_0_12px_rgba(0,255,65,0.3)]'
+                        : isPostEventLocked
+                        ? 'text-amber-400/80 hover:text-amber-300 hover:bg-amber-950/30 border border-amber-500/20'
                         : locked
                         ? 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/40 border border-transparent'
                         : 'text-slate-400 hover:text-[#00ff41] hover:bg-[#00ff41]/10 border border-transparent'
                     }`}
                   >
-                    <Icon className={`w-3.5 h-3.5 shrink-0 ${locked ? 'text-slate-500' : ''}`} />
+                    <Icon className={`w-3.5 h-3.5 shrink-0 ${isPostEventLocked ? 'text-amber-400' : locked ? 'text-slate-500' : ''}`} />
                     <span>{tab.label}</span>
                     {locked && (
-                      <Lock className="w-2.5 h-2.5 text-slate-500 shrink-0" />
+                      <Lock className={`w-2.5 h-2.5 shrink-0 ${isPostEventLocked ? 'text-amber-400' : 'text-slate-500'}`} />
                     )}
                   </button>
                 );
@@ -436,7 +453,8 @@ export const Header: React.FC<HeaderProps> = ({
               {navTabs.map((tab) => {
                 const Icon = tab.icon;
                 const isActive = currentTab === tab.id;
-                const locked = isTabLocked(tab.id);
+                const isPostEventLocked = tab.id === 'feedback' && isFeedbackLocked;
+                const locked = isTabLocked(tab.id) || isPostEventLocked;
                 return (
                   <button
                     key={tab.id}
@@ -444,16 +462,23 @@ export const Header: React.FC<HeaderProps> = ({
                     className={`w-full min-h-[46px] px-3.5 py-2.5 rounded-xl font-bold flex items-center justify-between transition-all cursor-pointer ${
                       isActive
                         ? 'bg-[#00ff41]/20 text-[#00ff41] border border-[#00ff41] shadow-[0_0_15px_rgba(0,255,65,0.3)]'
+                        : isPostEventLocked
+                        ? 'bg-amber-950/20 text-amber-300 hover:text-white border border-amber-500/30'
                         : locked
                         ? 'bg-[#08111d]/40 text-slate-500 hover:text-slate-300 border border-slate-900'
                         : 'bg-[#08111d]/60 text-slate-300 hover:text-white hover:bg-slate-800/60 border border-slate-800/80'
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <Icon className={`w-4 h-4 ${isActive ? 'text-[#00ff41]' : locked ? 'text-slate-600' : 'text-slate-400'}`} />
-                      <span className={`text-sm tracking-wide ${locked ? 'text-slate-500' : ''}`}>{tab.label}</span>
+                      <Icon className={`w-4 h-4 ${isActive ? 'text-[#00ff41]' : isPostEventLocked ? 'text-amber-400' : locked ? 'text-slate-600' : 'text-slate-400'}`} />
+                      <span className={`text-sm tracking-wide ${isPostEventLocked ? 'text-amber-300' : locked ? 'text-slate-500' : ''}`}>{tab.label}</span>
                     </div>
-                    {locked ? (
+                    {isPostEventLocked ? (
+                      <span className="text-[10px] text-amber-400 font-mono flex items-center gap-1 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-500/30">
+                        <Lock className="w-2.5 h-2.5 text-amber-400" />
+                        <span>POST-EVENT</span>
+                      </span>
+                    ) : locked ? (
                       <span className="text-[10px] text-slate-500 font-mono flex items-center gap-1 bg-slate-900/90 px-2 py-0.5 rounded border border-slate-800">
                         <Lock className="w-2.5 h-2.5 text-slate-500" />
                         <span>LOCKED</span>

@@ -2163,7 +2163,23 @@ app.post('/api/feedback', async (req: Request, res: Response) => {
     return res.status(429).json({ success: false, error: 'Feedback rate limit reached. Please wait a moment.' });
   }
 
+  // Enforce Competition Conclusion Rule: Feedback is locked until event finishes
   const token = req.headers.authorization?.replace('Bearer ', '');
+  let isAdmin = false;
+  if (token) {
+    const verified = verifySignedToken(token);
+    if (verified.valid && verified.payload && verified.payload.role === 'admin') {
+      isAdmin = true;
+    }
+  }
+
+  if (competitionState.status !== 'ended' && !isAdmin) {
+    return res.status(403).json({
+      success: false,
+      error: 'Feedback portal is locked. Feedback evaluations can only be submitted after the competition is complete and concluded by the organizers.',
+    });
+  }
+
   let resolvedTeamId = 'anonymous';
   let resolvedTeamName = 'Participant';
 
