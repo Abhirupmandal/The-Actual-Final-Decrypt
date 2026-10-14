@@ -246,6 +246,16 @@ export const PreCompetitionGate: React.FC<PreCompetitionGateProps> = ({
                 Clicking the start button will automatically enter Fullscreen mode for your session once the tournament begins.
               </p>
             </div>
+
+            <div className="p-3.5 rounded-xl bg-[#080b12] border border-amber-500/40 sm:col-span-2 shadow-[0_0_15px_rgba(245,158,11,0.15)]">
+              <div className="text-amber-400 font-bold flex items-center gap-1.5 mb-1">
+                <Key className="w-3.5 h-3.5 text-amber-400" />
+                <span>5. IMPORTANT: NOTE DOWN YOUR GMAIL ID &amp; PASSWORD ON PAPER</span>
+              </div>
+              <p className="text-[11px] text-slate-200 font-sans leading-relaxed">
+                Please remember your registered <span className="text-amber-300 font-bold">Gmail ID and Password</span> or note them down on your paper right now. If your browser closes, tab reloads, or device restarts, you will need the exact same credentials to log back in without losing your team score.
+              </p>
+            </div>
           </div>
         </div>
 

@@ -419,6 +419,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
             </div>
 
+            {/* Credentials Note on Paper Reminder */}
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/40 text-amber-300 text-xs flex items-start gap-2.5">
+              <Key className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div className="leading-snug">
+                <span className="font-bold text-amber-200 block uppercase tracking-wide">
+                  ⚠️ Note Down Your Credentials on Paper:
+                </span>
+                Please remember your registered <strong>Gmail ID and Password</strong> or write them down on your paper. You will need them if you need to re-login during the competition.
+              </div>
+            </div>
+
             <div className="pt-2">
               <button
                 type="submit"
