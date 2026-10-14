@@ -1323,6 +1323,7 @@ class SqliteLeaderboardStore {
         members TEXT NOT NULL DEFAULT '[]',
         score INTEGER NOT NULL DEFAULT 0,
         solves_count INTEGER NOT NULL DEFAULT 0,
+        first_bloods_count INTEGER NOT NULL DEFAULT 0,
         total_failed_attempts INTEGER NOT NULL DEFAULT 0,
         last_solve_time INTEGER NOT NULL DEFAULT 0,
         strikes INTEGER NOT NULL DEFAULT 0,
@@ -1332,6 +1333,10 @@ class SqliteLeaderboardStore {
       );
       CREATE INDEX IF NOT EXISTS idx_leaderboard_rank ON leaderboard(rank ASC);
       CREATE INDEX IF NOT EXISTS idx_leaderboard_score ON leaderboard(score DESC);
+
+      try {
+        this.db.run('ALTER TABLE leaderboard ADD COLUMN first_bloods_count INTEGER NOT NULL DEFAULT 0;');
+      } catch (_) {}
 
       CREATE TABLE IF NOT EXISTS leaderboard_snapshots (
         id TEXT PRIMARY KEY,
@@ -1347,10 +1352,10 @@ class SqliteLeaderboardStore {
       this.db.run('DELETE FROM leaderboard;');
       const stmt = this.db.prepare(`
         INSERT INTO leaderboard (
-          rank, team_id, team_name, members, score, solves_count,
+          rank, team_id, team_name, members, score, solves_count, first_bloods_count,
           total_failed_attempts, last_solve_time, strikes, is_disqualified,
           is_flagged_anomaly, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       const now = Date.now();
@@ -1362,6 +1367,7 @@ class SqliteLeaderboardStore {
           JSON.stringify(e.members || []),
           e.score,
           e.solvesCount,
+          e.firstBloodsCount || 0,
           e.totalFailedAttempts,
           e.lastSolveTime,
           e.strikes,
@@ -1411,6 +1417,7 @@ class SqliteLeaderboardStore {
           members: JSON.parse(String(row.members || '[]')),
           score: Number(row.score),
           solvesCount: Number(row.solves_count),
+          firstBloodsCount: Number(row.first_bloods_count || 0),
           totalFailedAttempts: Number(row.total_failed_attempts),
           lastSolveTime: Number(row.last_solve_time),
           strikes: Number(row.strikes),

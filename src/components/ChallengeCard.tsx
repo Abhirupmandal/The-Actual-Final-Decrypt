@@ -106,16 +106,27 @@ export const ChallengeCard: React.FC<ChallengeCardProps> = ({
 
       if (res.ok && data.success) {
         playSuccessChime();
-        confetti({
-          particleCount: 90,
-          spread: 70,
-          origin: { y: 0.65 },
-          colors: ['#00ff66', '#10b981', '#00f0ff', '#ffffff', '#f59e0b'],
-        });
+        if (data.isFirstBlood) {
+          confetti({
+            particleCount: 150,
+            spread: 90,
+            origin: { y: 0.5 },
+            colors: ['#ef4444', '#f59e0b', '#fbbf24', '#ffffff', '#00ff66'],
+          });
+        } else {
+          confetti({
+            particleCount: 90,
+            spread: 70,
+            origin: { y: 0.65 },
+            colors: ['#00ff66', '#10b981', '#00f0ff', '#ffffff', '#f59e0b'],
+          });
+        }
 
         setStatusMessage({
           type: 'success',
-          text: data.message || 'FLAG DECRYPTED! Points added to team score.',
+          text: data.isFirstBlood
+            ? `🩸 FIRST BLOOD CLAIMED! +${data.pointsAwarded || 150} PTS (+50 BONUS) AWARDED!`
+            : data.message || 'FLAG DECRYPTED! Points added to team score.',
         });
         setFlagInput('');
         onRefreshState();

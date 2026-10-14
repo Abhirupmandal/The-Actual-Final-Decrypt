@@ -197,6 +197,7 @@ export interface LeaderboardEntry {
   members: string[];
   score: number;
   solvesCount: number;
+  firstBloodsCount?: number;
   totalFailedAttempts: number;
   lastSolveTime: number;
   strikes: number;

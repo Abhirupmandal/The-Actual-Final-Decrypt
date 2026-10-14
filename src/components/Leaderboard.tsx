@@ -15,6 +15,7 @@ import {
   Layers,
   Crown,
   Zap,
+  Flame,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
@@ -309,6 +310,16 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                           </span>
                         )}
 
+                        {Boolean(entry.firstBloodsCount && entry.firstBloodsCount > 0) && (
+                          <span
+                            className="text-[10px] font-black text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/50 shadow-[0_0_12px_rgba(245,158,11,0.3)] flex items-center gap-1 animate-pulse"
+                            title={`${entry.teamName} achieved ${entry.firstBloodsCount} First Blood${entry.firstBloodsCount > 1 ? 's' : ''}! (+50 pts bonus each)`}
+                          >
+                            <Flame className="w-3 h-3 text-red-500 fill-red-500 shrink-0" />
+                            <span>{entry.firstBloodsCount === 1 ? '1ST BLOOD' : `${entry.firstBloodsCount}x 1ST BLOOD`}</span>
+                          </span>
+                        )}
+
                         {entry.isDisqualified && (
                           <span className="text-[10px] font-black text-red-300 bg-red-950 px-2 py-0.5 rounded border border-red-500 shadow-[0_0_10px_rgba(239,68,68,0.4)] flex items-center gap-1 animate-pulse">
                             <AlertTriangle className="w-3 h-3 text-red-400" />
@@ -366,10 +377,21 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                     </td>
 
                     <td className="py-4 px-4 text-center">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${entry.solvesCount > 0 ? 'bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 font-bold' : 'bg-slate-900/40 border border-slate-800 text-slate-500'}`}>
-                        <CheckCircle className={`w-3.5 h-3.5 ${entry.solvesCount > 0 ? 'text-[#00ff66]' : 'text-slate-600'}`} />
-                        <span>{entry.solvesCount}</span>
-                      </span>
+                      <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${entry.solvesCount > 0 ? 'bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 font-bold' : 'bg-slate-900/40 border border-slate-800 text-slate-500'}`}>
+                          <CheckCircle className={`w-3.5 h-3.5 ${entry.solvesCount > 0 ? 'text-[#00ff66]' : 'text-slate-600'}`} />
+                          <span>{entry.solvesCount}</span>
+                        </span>
+                        {Boolean(entry.firstBloodsCount && entry.firstBloodsCount > 0) && (
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-300 text-xs font-black shadow-[0_0_8px_rgba(245,158,11,0.25)]"
+                            title={`${entry.firstBloodsCount} First Blood bonus solves (+50 pts each)`}
+                          >
+                            <Flame className="w-3.5 h-3.5 text-red-500 fill-red-500 shrink-0" />
+                            <span>{entry.firstBloodsCount}</span>
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     <td className="py-4 px-4 text-center text-slate-400">
