@@ -313,7 +313,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({
                         {Boolean(entry.firstBloodsCount && entry.firstBloodsCount > 0) && (
                           <span
                             className="text-[10px] font-black text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/50 shadow-[0_0_12px_rgba(245,158,11,0.3)] flex items-center gap-1 animate-pulse"
-                            title={`${entry.teamName} achieved ${entry.firstBloodsCount} First Blood${entry.firstBloodsCount > 1 ? 's' : ''}! (+50 pts bonus each)`}
+                            title={`${entry.teamName} achieved ${entry.firstBloodsCount} First Blood${(entry.firstBloodsCount ?? 0) > 1 ? 's' : ''}! (+50 pts bonus each)`}
                           >
                             <Flame className="w-3 h-3 text-red-500 fill-red-500 shrink-0" />
                             <span>{entry.firstBloodsCount === 1 ? '1ST BLOOD' : `${entry.firstBloodsCount}x 1ST BLOOD`}</span>
