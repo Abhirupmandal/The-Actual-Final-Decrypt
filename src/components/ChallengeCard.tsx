@@ -27,6 +27,7 @@ import { playCyberBlip, playSuccessChime, playErrorBuzz, playHintUnlockSound } f
 interface ChallengeCardProps {
   challenge: PublicChallengeView;
   teamLoggedIn: boolean;
+  currentTeamName?: string;
   isLockedOrEnded?: boolean;
   onOpenAuthModal: () => void;
   onViewWriteup: (challenge: PublicChallengeView) => void;
@@ -37,6 +38,7 @@ interface ChallengeCardProps {
 export const ChallengeCard: React.FC<ChallengeCardProps> = ({
   challenge,
   teamLoggedIn,
+  currentTeamName,
   isLockedOrEnded = false,
   onOpenAuthModal,
   onViewWriteup,
@@ -265,16 +267,17 @@ export const ChallengeCard: React.FC<ChallengeCardProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            {challenge.firstBloodTeam && (
-              <div
-                className="flex items-center gap-1.5 text-[10px] font-mono font-black text-amber-300 px-2.5 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/40 shadow-[0_0_10px_rgba(245,158,11,0.25)]"
-                title={`First Blood claimed by ${challenge.firstBloodTeam}`}
-              >
-                <Flame className="w-3.5 h-3.5 text-red-500 fill-red-500 animate-pulse shrink-0" />
-                <span className="hidden sm:inline">1ST BLOOD:</span>
-                <span className="truncate max-w-[85px]">{challenge.firstBloodTeam}</span>
-              </div>
-            )}
+            {challenge.firstBloodTeam &&
+              currentTeamName &&
+              challenge.firstBloodTeam.trim().toLowerCase() === currentTeamName.trim().toLowerCase() && (
+                <div
+                  className="flex items-center gap-1.5 text-[10px] font-mono font-black text-amber-300 px-2.5 py-0.5 rounded-md bg-amber-500/20 border border-amber-500/50 shadow-[0_0_12px_rgba(245,158,11,0.3)] animate-pulse"
+                  title="Your team claimed First Blood on this challenge! (+50 pts bonus)"
+                >
+                  <Flame className="w-3.5 h-3.5 text-red-500 fill-red-500 shrink-0" />
+                  <span>1ST BLOOD (+50)</span>
+                </div>
+              )}
 
             {/* Point Value in Monospace */}
             <div className="text-right">

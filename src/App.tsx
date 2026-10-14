@@ -953,6 +953,7 @@ export default function App() {
                   <ChallengeSection
                     challenges={challenges}
                     teamLoggedIn={Boolean(team)}
+                    currentTeamName={team?.teamName}
                     isLockedOrEnded={competitionState.remainingSeconds <= 0}
                     onOpenAuthModal={() => setIsAuthModalOpen(true)}
                     onViewWriteup={(chal) => setActiveWriteupChallenge(chal)}
